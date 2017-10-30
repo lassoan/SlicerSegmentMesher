@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.7)
 # 3.7 is required for SOURCE_SUBDIR External_cleaver.cmake
 
-project(SlicerSegmentMesher)
+project(SegmentMesher)
 
 #-----------------------------------------------------------------------------
 # Extension meta-information
