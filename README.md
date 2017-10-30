@@ -3,12 +3,9 @@
 This is an extenion for 3D Slicer for creating volumetric meshes from segmentation using Cleaver2 or TetGen.
 
 <a href="https://sciinstitute.github.io/cleaver.pages">Cleaver2</a> mesher is freely usable, without any restrictions.
-<a href="http://www.tetgen.org">TetGen</a> mesheris only free for private, research, and educational use (see <a href="https://people.sc.fsu.edu/~jburkardt/examples/tetgen/license.txt">license</a> for details).
-
+<a href="http://www.tetgen.org">TetGen</a> mesher is only free for private, research, and educational use (see <a href="https://people.sc.fsu.edu/~jburkardt/examples/tetgen/license.txt">license</a> for details).
 
 ![Alt text](Screenshot01.jpg?raw=true "Segment Mesher module user interface")
-
-![Alt text](Screenshot02.gif?raw=true "Segment meshing result")
 
 ## Installation
 
@@ -29,6 +26,8 @@ This is an extenion for 3D Slicer for creating volumetric meshes from segmentati
 * Go to "Segmentations" module to hide current segmentation.
 * Switch to "Models" module to adjust visualization parameters.
 * To save Output model select in menu: File / Save.
+
+![Alt text](Screenshot02.gif?raw=true "Segment meshing result (using Cleaver)")
 
 ## Mesh generation parameters
 
