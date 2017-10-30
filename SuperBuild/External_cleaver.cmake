@@ -27,11 +27,12 @@ if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
   ExternalProject_Add(${proj}
     # Slicer
     ${${proj}_EP_ARGS}
-    SOURCE_DIR ${CMAKE_BINARY_DIR}/${proj}/src
-    #SOURCE_SUBDIR src # requires CMake 3.7 or later
+    SOURCE_DIR ${CMAKE_BINARY_DIR}/${proj}
+    SOURCE_SUBDIR src # requires CMake 3.7 or later
     BINARY_DIR ${proj}-build
     INSTALL_DIR ${${proj}_INSTALL_DIR}
-    GIT_REPOSITORY "${git_protocol}://github.com/SCIInstitute/Cleaver2.git"
+    #GIT_REPOSITORY "${git_protocol}://github.com/SCIInstitute/Cleaver2.git"
+    GIT_REPOSITORY "${git_protocol}://github.com/lassoan/Cleaver2.git" # use this fork instead of official repository until https://github.com/SCIInstitute/Cleaver2/pull/60 is merged
     #GIT_TAG "ef057ff89233822b26b04b31c3c043af57d5deff"
     #--Patch step-------------  
     #PATCH_COMMAND ${CMAKE_COMMAND} -Delastix_SRC_DIR=${CMAKE_BINARY_DIR}/${proj}

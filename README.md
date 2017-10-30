@@ -1,29 +1,37 @@
-# SlicerTetGen
-This extension makes available TetGen, a quality tetrahedral mesh generator and a 3D delaunay triangulator (http://www.tetgen.org) available in 3D Slicer.
+# Segment Mesher extension
+
+This is an extenion for 3D Slicer for creating volumetric meshes from segmentation using Cleaver2 or TetGen.
+
+<a href="https://sciinstitute.github.io/cleaver.pages">Cleaver2</a> mesher is freely usable, without any restrictions.
+<a href="http://www.tetgen.org">TetGen</a> mesheris only free for private, research, and educational use (see <a href="https://people.sc.fsu.edu/~jburkardt/examples/tetgen/license.txt">license</a> for details).
+
+
+![Alt text](Screenshot01.png?raw=true "Segment Mesher module user interface")
+
+![Alt text](Screenshot02.png?raw=true "Segment meshing result")
 
 ## Installation
 
 * Download and install a recent nightly version of 3D Slicer (https://download.slicer.org).
 * Start 3D Slicer application, open the Extension Manager (menu: View / Extension manager)
-* Install SlicerTetGen extension.
+* Install SegmentMesher extension.
 
-## Tutorial #TODO
+## Tutorial
 
 * Start 3D Slicer
-* Load your volumes (for example: switch to SampleData module and load MRBrainTumor1 and MRBrainTumor2 images)
-* Switch to TetGen module (in Registration category)
-* Select Fixed volume (for example: MRBrainTumor1)
-* Select Moving volume (this volume will be resampled to match voxels of the Fixed volume; for example: MRBrainTumor2)
-* Select Preset: `generic (all)` performs deformable registration; `generic rigid (all)` performs rigid registration
-* Select "Create new Volume" for Output volume (this will be the resampled moving volume)
-* Select "Create new Transform" if later you want to visualize the displacement field or apply the transform to other nodes (points, surfaces, other volumes)
-* Click Apply button and wait a couple of minutes
+* Load a volume (for example: switch to SampleData module and load MRBrainTumor1 imaage)
+* Switch to Mesh Segmenter module (in Segmentation category)
+* Select "Create new Model" for Output model (this will contain the generated volumetric mesh)
+* Click Apply button and wait a about a minute
 
-## Visualize and save results #TODO
-* To comapre Fixed volume with Output volume (registered moving volume): set Fixed volume as Foreground volume in slice viewers and fade between the Output volume and Foreground volume to see how well they are aligned.
-* To display displacement field: in Transforms module, select the Output transform and in Display section enable visualization in slice and/or 3D views.
-* To apply transforms to other nodes: use Transforms module (or in Data module / Transform hierarchy tab: drag-and-drop nodes under the Output transform).
-* To save Output volume or transform select menu: File / Save.
+## Visualize and save results
+* Open "Display" section to enable clipping with slices.
+* Go to "Segmentations" module to hide current segmentation.
+* Switch to "Models" module to adjust visualization parameters.
+* To save Output model select in menu: File / Save.
 
+## Mesh generation parameters
 
-<p>Advanced parameters are described <a href="http://wias-berlin.de/software/tetgen/1.5/doc/manual/manual005.html#sec%3Acmdline">here</a>.
+Cleaver parameters are described at https://sciinstitute.github.io/cleaver.pages/manual.html
+
+TetGen parameters are described at http://wias-berlin.de/software/tetgen/1.5/doc/manual/manual005.html#sec%3Acmdline

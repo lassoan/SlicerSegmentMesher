@@ -1,15 +1,16 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.7)
+# 3.7 is required for SOURCE_SUBDIR External_cleaver.cmake
 
 project(SlicerSegmentMesher)
 
 #-----------------------------------------------------------------------------
 # Extension meta-information
 set(EXTENSION_HOMEPAGE "https://github.com/lassoan/SlicerSegmentMesher")
-set(EXTENSION_CATEGORY "Registration")
+set(EXTENSION_CATEGORY "Segmentation")
 set(EXTENSION_CONTRIBUTORS "Andras Lasso (PerkLab, Queen's University)")
 set(EXTENSION_DESCRIPTION "Create volumetric mesh from segmentation using Cleaver2 or TetGen.")
-set(EXTENSION_ICONURL "https://raw.githubusercontent.com/lassoan/SlicerTetGen/master/SlicerTetGen.png") # TODO
-set(EXTENSION_SCREENSHOTURLS "https://raw.githubusercontent.com/lassoan/SlicerTetGen/master/Screenshot01.jpg") # TODO
+set(EXTENSION_ICONURL "https://raw.githubusercontent.com/lassoan/SlicerSegmentMesher/master/SlicerSegmentMesher.png")
+set(EXTENSION_SCREENSHOTURLS "https://raw.githubusercontent.com/lassoan/SlicerSegmentMesher/master/Screenshot01.jpg")
 set(EXTENSION_DEPENDS "NA") # Specified as a space separated string, a list or 'NA' if any
 set(EXTENSION_BUILD_SUBDIRECTORY inner-build)
 

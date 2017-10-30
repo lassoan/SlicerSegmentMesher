@@ -15,13 +15,14 @@ class SegmentMesher(ScriptedLoadableModule):
 
   def __init__(self, parent):
     ScriptedLoadableModule.__init__(self, parent)
-    self.parent.title = "Segment mesher"
+    self.parent.title = "Segment Mesher"
     self.parent.categories = ["Segmentation"]
     self.parent.dependencies = []
     self.parent.contributors = ["Andras Lasso (PerkLab - Queen's University)"]
-    self.parent.helpText = """Create volumetric mesh consisting of tetrahedral elements using Cleaver2 (https://sciinstitute.github.io/cleaver.pages) or TetGen (http://www.tetgen.org).
-<p>Cleaver2 is freely usable for any purposes.
-<p>Note that TetGet is only free for private, research, and  educational purposes (<a href="https://people.sc.fsu.edu/~jburkardt/examples/tetgen/license.txt">see license for details</a>).
+    self.parent.helpText = """Create volumetric mesh consisting of tetrahedral elements using Cleaver2 or TetGen meshers.
+<p>See <a href="https://github.com/lassoan/SlicerSegmentMesher/blob/master/README.md">module documentation</a> for description of meshing parameters.    
+<p><a href="https://sciinstitute.github.io/cleaver.pages">Cleaver2</a> is freely usable, without any restrictions.
+<p><a href="http://www.tetgen.org">TetGen<a> is only free for private, research, and educational use (see <a href="https://people.sc.fsu.edu/~jburkardt/examples/tetgen/license.txt">license</a> for details).
 """
     #self.parent.helpText += self.getDefaultModuleDocumentationLink()
     self.parent.acknowledgementText = """
@@ -125,20 +126,6 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     outputParametersFormLayout.addRow("Output model: ", self.outputModelSelector)
 
     #
-    # Display
-    #
-    displayParametersCollapsibleButton = ctk.ctkCollapsibleButton()
-    displayParametersCollapsibleButton.text = "Display"
-    displayParametersCollapsibleButton.collapsed = True
-    self.layout.addWidget(displayParametersCollapsibleButton)
-    displayParametersFormLayout = qt.QFormLayout(displayParametersCollapsibleButton)
-    
-    self.clipNodeWidget=slicer.qMRMLClipNodeWidget()
-    clipNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLClipModelsNode")
-    self.clipNodeWidget.setMRMLClipNode(clipNode)
-    displayParametersFormLayout.addRow(self.clipNodeWidget)
-    
-    #
     # Advanced area
     #
     self.advancedCollapsibleButton = ctk.ctkCollapsibleButton()
@@ -147,6 +134,16 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     self.layout.addWidget(self.advancedCollapsibleButton)
     advancedFormLayout = qt.QFormLayout(self.advancedCollapsibleButton)
 
+    self.cleaverAdditionalParametersWidget = qt.QLineEdit()
+    self.cleaverAdditionalParametersWidget.setToolTip('See description of parameters in module documentation ')
+    advancedFormLayout.addRow("Cleaver meshing options:", self.cleaverAdditionalParametersWidget)
+    self.cleaverAdditionalParametersWidget.text = "--scale 0.2 --multiplier 2 --grading 5"
+
+    self.tetGenAdditionalParametersWidget = qt.QLineEdit()
+    self.tetGenAdditionalParametersWidget.setToolTip('See description of parameters in module documentation ')
+    advancedFormLayout.addRow("TetGen meshing options:", self.tetGenAdditionalParametersWidget)
+    self.tetGenAdditionalParametersWidget.text = ""
+    
     self.showDetailedLogDuringExecutionCheckBox = qt.QCheckBox(" ")
     self.showDetailedLogDuringExecutionCheckBox.checked = False
     self.showDetailedLogDuringExecutionCheckBox.setToolTip("Show detailed log during model generation.")
@@ -183,6 +180,20 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
       "If value is empty then tetgen bundled with this extension will be used.")
     advancedFormLayout.addRow("Custom TetGen executable path:", self.customTetGenPathSelector)
 
+    #
+    # Display
+    #
+    displayParametersCollapsibleButton = ctk.ctkCollapsibleButton()
+    displayParametersCollapsibleButton.text = "Display"
+    displayParametersCollapsibleButton.collapsed = True
+    self.layout.addWidget(displayParametersCollapsibleButton)
+    displayParametersFormLayout = qt.QFormLayout(displayParametersCollapsibleButton)
+    
+    self.clipNodeWidget=slicer.qMRMLClipNodeWidget()
+    clipNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLClipModelsNode")
+    self.clipNodeWidget.setMRMLClipNode(clipNode)
+    displayParametersFormLayout.addRow(self.clipNodeWidget)
+    
     #
     # Apply Button
     #
@@ -266,9 +277,9 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
       method = self.methodSelectorComboBox.itemData(self.methodSelectorComboBox.currentIndex)
       print method
       if method == METHOD_CLEAVER:
-        self.logic.createMeshFromSegmentationCleaver(self.inputModelSelector.currentNode(), self.outputModelSelector.currentNode())
+        self.logic.createMeshFromSegmentationCleaver(self.inputModelSelector.currentNode(), self.outputModelSelector.currentNode(), self.cleaverAdditionalParametersWidget.text)
       else:
-        self.logic.createMeshFromSegmentationTetGen(self.inputModelSelector.currentNode(), self.outputModelSelector.currentNode())
+        self.logic.createMeshFromSegmentationTetGen(self.inputModelSelector.currentNode(), self.outputModelSelector.currentNode(), self.tetGenAdditionalParametersWidget.text)
 
     except Exception as e:
       print e
@@ -403,29 +414,20 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     self.tetGenPath = None
     self.getTetGenPath()
 
-  def startCleaver(self, cmdLineArguments):
-    self.addLog("Generating volumetric mesh using Cleaver...")
+  def startMesher(self, cmdLineArguments, executableFilePath):
+    self.addLog("Generating volumetric mesh...")
     import subprocess
     
     # Hide console window
     info = subprocess.STARTUPINFO()
     info.dwFlags = 1
-    info.wShowWindow = 0    
+    info.wShowWindow = 0
     
-    executableFilePath = self.getCleaverPath()
     logging.info("Generate mesh using: "+executableFilePath+": "+repr(cmdLineArguments))
     return subprocess.Popen([executableFilePath] + cmdLineArguments,
                             stdout=subprocess.PIPE, universal_newlines=True, startupinfo=info)
-    
-  def startTetGen(self, cmdLineArguments):
-    self.addLog("Generating volumetric mesh using TetGen...")
-    import subprocess
-    executableFilePath = self.getTetGenPath()
-    logging.info("Generate mesh using: "+executableFilePath+": "+repr(cmdLineArguments))
-    return subprocess.Popen([executableFilePath] + cmdLineArguments,
-                            stdout=subprocess.PIPE, universal_newlines=True)
 
-  def logProcessOutput(self, process):
+  def logProcessOutput(self, process, processName):
     # save process output (if not logged) so that it can be displayed in case of an error
     processOutput = ''
     import subprocess
@@ -445,7 +447,7 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
       else:
         if processOutput:
           self.addLog(processOutput)
-        raise subprocess.CalledProcessError(return_code, "tetGen")
+        raise subprocess.CalledProcessError(return_code, processName)
 
   def getTempDirectoryBase(self):
     tempDir = qt.QDir(slicer.app.temporaryPath)
@@ -463,31 +465,40 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     qt.QDir().mkpath(dirPath)
     return dirPath
 
-  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode):
-
+  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, additionalParameters="--scale 0.2 --multiplier 2 --grading 5"):
+  
     self.abortRequested = False
     tempDir = self.createTempDirectory()
     self.addLog('Mesh generation using Cleaver is started in working directory: '+tempDir)
 
+    inputParamsCleaver = []
+    
     # Write inputs
     qt.QDir().mkpath(tempDir)
-
-    inputParamsCleaver = []
     
     labelmapVolumeNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
     slicer.modules.segmentations.logic().ExportAllSegmentsToLabelmapNode(inputSegmentation, labelmapVolumeNode)
     inputLabelmapVolumeFilePath = os.path.join(tempDir, "inputLabelmap.nrrd")
     slicer.util.saveNode(labelmapVolumeNode, inputLabelmapVolumeFilePath, {"useCompression": False})
-    # Keep IJK to RAS matrix and color node, we'll later need them
-    ijkToRasMatrix = vtk.vtkMatrix4x4()
-    labelmapVolumeNode.GetIJKToRASMatrix(ijkToRasMatrix)
-    colorTableNode = labelmapVolumeNode.GetDisplayNode().GetColorNode()
-    slicer.mrmlScene.RemoveNode(labelmapVolumeNode)
-    slicer.mrmlScene.RemoveNode(colorTableNode)
-    
     inputParamsCleaver.extend(["--input_files", inputLabelmapVolumeFilePath])
     inputParamsCleaver.append("--segmentation")
     
+    # Keep IJK to RAS matrix, we'll need it later
+    unscaledIjkToRasMatrix = vtk.vtkMatrix4x4()
+    labelmapVolumeNode.GetIJKToRASDirectionMatrix(unscaledIjkToRasMatrix)
+    origin = labelmapVolumeNode.GetOrigin()
+    for i in range(3):
+      unscaledIjkToRasMatrix.SetElement(i,3, origin[i])
+
+    # Keep color node, we'll need it later
+    colorTableNode = labelmapVolumeNode.GetDisplayNode().GetColorNode()    
+    # Background color is transparent by default which is not ideal for 3D display
+    colorTableNode.SetColor(0,0.6,0.6,0.6,1.0)
+    
+    slicer.mrmlScene.RemoveNode(labelmapVolumeNode)
+    slicer.mrmlScene.RemoveNode(colorTableNode)
+    
+    # Set up output format
     
     inputParamsCleaver.extend(["--output_path", tempDir+"/"])
     inputParamsCleaver.extend(["--output_format", "vtkUSG"]) # VTK unstructed grid
@@ -497,13 +508,11 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     inputParamsCleaver.append("--verbose")
     
     # Quality
-    inputParamsCleaver.extend(["--scale", "0.2"])
-    inputParamsCleaver.extend(["--multiplier", "2"])
-    inputParamsCleaver.extend(["--grading", "5"])
+    inputParamsCleaver.extend(slicer.util.toVTKString(additionalParameters).split(' '))
 
     # Run Cleaver
-    ep = self.startCleaver(inputParamsCleaver)
-    self.logProcessOutput(ep)
+    ep = self.startMesher(inputParamsCleaver, self.getCleaverPath())
+    self.logProcessOutput(ep, self.cleaverFilename)
 
     # Read results
     if not self.abortRequested:
@@ -523,30 +532,35 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
       transformer = vtk.vtkTransformFilter()
       transformer.SetInputData(outputReader.GetOutput())
       ijkToRasTransform = vtk.vtkTransform()
-      ijkToRasTransform.SetMatrix(ijkToRasMatrix)
+      ijkToRasTransform.SetMatrix(unscaledIjkToRasMatrix)
       transformer.SetTransform(ijkToRasTransform)
       
       outputMeshNode.SetUnstructuredGridConnection(transformer.GetOutputPort())
-      if not outputMeshNode.GetDisplayNode():
+      outputMeshDisplayNode = outputMeshNode.GetDisplayNode()
+      if not outputMeshDisplayNode:
         # Initial setup of display node
         outputMeshNode.CreateDefaultDisplayNodes()
-        colorTableNode = slicer.mrmlScene.AddNode(colorTableNode)
         
         outputMeshDisplayNode = outputMeshNode.GetDisplayNode()
         outputMeshDisplayNode.SetEdgeVisibility(True)
         outputMeshDisplayNode.SetClipping(True)
-        
-        # Background color is transparent by default which is not ideal for 3D display
-        colorTableNode.SetColor(0,0.2,0.2,0.2,1.0)
+
+        colorTableNode = slicer.mrmlScene.AddNode(colorTableNode)
         outputMeshDisplayNode.SetAndObserveColorNodeID(colorTableNode.GetID())
-        #modelDisplayNode.AutoScalarRangeOff()
-        #modelDisplayNode.SetScalarRangeFlag(modelDisplayNode.UseColorNodeScalarRange)
-        #modelDisplayNode.SetScalarRange(0, 10.0)
-        outputMeshDisplayNode.SetActiveScalarName('labels')
+        
         outputMeshDisplayNode.ScalarVisibilityOn()
+        outputMeshDisplayNode.SetActiveScalarName('labels')
+        outputMeshDisplayNode.SetActiveAttributeLocation(vtk.vtkAssignAttribute.CELL_DATA);
         outputMeshDisplayNode.SetSliceIntersectionVisibility(True)
         outputMeshDisplayNode.SetSliceIntersectionOpacity(0.5)
-        
+      else:
+        currentColorNode = outputMeshDisplayNode.GetColorNode()
+        if currentColorNode.GetType() == currentColorNode.User and currentColorNode.IsA("vtkMRMLColorTableNode"):
+          # current color table node can be overwritten
+          currentColorNode.Copy(colorTableNode)
+        else:
+          colorTableNode = slicer.mrmlScene.AddNode(colorTableNode)
+          outputMeshDisplayNode.SetAndObserveColorNodeID(colorTableNode.GetID())
 
     # Clean up
     if self.deleteTemporaryFiles:
@@ -555,12 +569,24 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
     self.addLog("Model generation is completed")
     
-  def createMeshFromSegmentationTetGen(self, inputSegmentation, outputMeshNode):
-    #TODO
-    pass
+  def createMeshFromSegmentationTetGen(self, inputSegmentation, outputMeshNode, additionalParameters=""):
     
+    visibleSegmentIds = vtk.vtkStringArray()
+    inputSegmentation.GetDisplayNode().GetVisibleSegmentIDs(visibleSegmentIds)
+    if visibleSegmentIds.GetNumberOfValues() == 0:
+      logging.info("createMeshFromSegmentationTetGen skipped: there are no visible segments")
+      return
+    inputSegmentation.CreateClosedSurfaceRepresentation()
+    appender = vtk.vtkAppendPolyData()
+    for i in range(visibleSegmentIds.GetNumberOfValues()):
+      segmentId = visibleSegmentIds.GetValue(i)
+      polydata = inputSegmentation.GetClosedSurfaceRepresentation(segmentId)
+      appender.AddInputData(polydata)
+      
+    appender.Update()
+    self.createMeshFromPolyDataTetGen(appender.GetOutput(), outputMeshNode, additionalParameters)
     
-  def createMeshFromPolyDataTetGen(self, inputPolyData, outputMeshNode):
+  def createMeshFromPolyDataTetGen(self, inputPolyData, outputMeshNode, additionalParameters=""):
 
     self.abortRequested = False
     tempDir = self.createTempDirectory()
@@ -568,7 +594,6 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
     # Write inputs
     qt.QDir().mkpath(tempDir)
-
     
     inputSurfaceMeshFilePath = os.path.join(tempDir, "mesh.ply")
     inputWriter = vtk.vtkPLYWriter()
@@ -577,14 +602,13 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     inputWriter.SetFileTypeToASCII()
     inputWriter.Write()
     
-    
     inputParamsTetGen = []
-    inputParamsTetGen.append("-k")
+    inputParamsTetGen.append("-k"+additionalParameters)
     inputParamsTetGen.append(inputSurfaceMeshFilePath)
 
     # Run tetgen
-    ep = self.startTetGen(inputParamsTetGen)
-    self.logProcessOutput(ep)
+    ep = self.startMesher(inputParamsTetGen, self.getTetGenPath())
+    self.logProcessOutput(ep, self.tetGenFilename)
 
     # Read results
     if not self.abortRequested:
@@ -600,6 +624,14 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
       outputReader.ReadAllFieldsOn()
       outputReader.Update()
       outputMeshNode.SetUnstructuredGridConnection(outputReader.GetOutputPort())
+      
+      outputMeshDisplayNode = outputMeshNode.GetDisplayNode()
+      if not outputMeshDisplayNode:
+        # Initial setup of display node
+        outputMeshNode.CreateDefaultDisplayNodes()
+        outputMeshDisplayNode = outputMeshNode.GetDisplayNode()
+        outputMeshDisplayNode.SetEdgeVisibility(True)
+        outputMeshDisplayNode.SetClipping(True)
 
     # Clean up
     if self.deleteTemporaryFiles:
