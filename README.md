@@ -6,9 +6,9 @@ This is an extenion for 3D Slicer for creating volumetric meshes from segmentati
 <a href="http://www.tetgen.org">TetGen</a> mesheris only free for private, research, and educational use (see <a href="https://people.sc.fsu.edu/~jburkardt/examples/tetgen/license.txt">license</a> for details).
 
 
-![Alt text](Screenshot01.png?raw=true "Segment Mesher module user interface")
+![Alt text](Screenshot01.jpg?raw=true "Segment Mesher module user interface")
 
-![Alt text](Screenshot02.png?raw=true "Segment meshing result")
+![Alt text](Screenshot02.gif?raw=true "Segment meshing result")
 
 ## Installation
 
