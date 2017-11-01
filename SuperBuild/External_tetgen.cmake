@@ -33,15 +33,12 @@ if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
     INSTALL_DIR ${${proj}_INSTALL_DIR}
     GIT_REPOSITORY "${git_protocol}://github.com/lassoan/tetgen.git"
     #GIT_TAG "ef057ff89233822b26b04b31c3c043af57d5deff"
-    #--Patch step-------------  
+    #--Patch step-------------
     #PATCH_COMMAND ${CMAKE_COMMAND} -Delastix_SRC_DIR=${CMAKE_BINARY_DIR}/${proj}
     #  -P ${CMAKE_CURRENT_LIST_DIR}/${proj}_patch.cmake
-    #--Configure step-------------  
+    #--Configure step-------------
     CMAKE_CACHE_ARGS
-      #-DSubversion_SVN_EXECUTABLE:STRING=${Subversion_SVN_EXECUTABLE}
-      -DGIT_EXECUTABLE:STRING=${GIT_EXECUTABLE}    
-      #-DITK_DIR:STRING=${ITK_DIR}
-      #-DUSE_KNNGraphAlphaMutualInformationMetric:BOOL=OFF
+      -DGIT_EXECUTABLE:STRING=${GIT_EXECUTABLE}
       -DCMAKE_CXX_COMPILER:FILEPATH=${CMAKE_CXX_COMPILER}
       -DCMAKE_CXX_FLAGS:STRING=${ep_common_cxx_flags}
       -DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}
@@ -49,12 +46,12 @@ if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
       -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
       -DBUILD_TESTING:BOOL=OFF
       -DCMAKE_MACOSX_RPATH:BOOL=0
-      # location of elastix.exe and transformix.exe in the build tree:
+      # location of build outputs in the build tree
       -DCMAKE_RUNTIME_OUTPUT_DIRECTORY:PATH=${CMAKE_BINARY_DIR}/${Slicer_THIRDPARTY_BIN_DIR}
       -DCMAKE_LIBRARY_OUTPUT_DIRECTORY:PATH=${CMAKE_BINARY_DIR}/${Slicer_THIRDPARTY_LIB_DIR}
-      -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY:PATH=${CMAKE_ARCHIVE_OUTPUT_DIRECTORY} 
+      -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY:PATH=${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
+      # location of build outputs in the installation folder
       -DTETGEN_RUNTIME_DIR:STRING=${Slicer_INSTALL_THIRDPARTY_LIB_DIR}
-      -DTETGEN_LIBRARY_DIR:STRING=${Slicer_INSTALL_THIRDPARTY_LIB_DIR}
     #--Build step-----------------
     #--Install step-----------------
     # Don't perform installation at the end of the build
@@ -62,10 +59,6 @@ if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
     DEPENDS
       ${${proj}_DEPENDS}
     )
-  #set(${proj}_DIR ${${proj}_INSTALL_DIR})
-  #if(UNIX)
-  #  set(${proj}_DIR ${${proj}_INSTALL_DIR}/share/elastix)
-  #endif()
 
 else()
   ExternalProject_Add_Empty(${proj} DEPENDS ${${proj}_DEPENDS})

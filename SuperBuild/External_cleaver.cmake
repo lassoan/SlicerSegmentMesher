@@ -32,14 +32,13 @@ if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
     BINARY_DIR ${proj}-build
     INSTALL_DIR ${${proj}_INSTALL_DIR}
     #GIT_REPOSITORY "${git_protocol}://github.com/SCIInstitute/Cleaver2.git"
-    GIT_REPOSITORY "${git_protocol}://github.com/lassoan/Cleaver2.git" # use this fork instead of official repository until https://github.com/SCIInstitute/Cleaver2/pull/60 is merged
+    GIT_REPOSITORY "${git_protocol}://github.com/lassoan/Cleaver2.git" # use this fork instead of official repository until packaging and build issues are resolved on all platforms
     #GIT_TAG "ef057ff89233822b26b04b31c3c043af57d5deff"
     #--Patch step-------------  
     #PATCH_COMMAND ${CMAKE_COMMAND} -Delastix_SRC_DIR=${CMAKE_BINARY_DIR}/${proj}
     #  -P ${CMAKE_CURRENT_LIST_DIR}/${proj}_patch.cmake
     #--Configure step-------------  
     CMAKE_CACHE_ARGS
-      #-DSubversion_SVN_EXECUTABLE:STRING=${Subversion_SVN_EXECUTABLE}
       -DGIT_EXECUTABLE:STRING=${GIT_EXECUTABLE}    
       -DITK_DIR:STRING=${ITK_DIR}
       -DBUILD_CLI:BOOL=ON
@@ -50,7 +49,6 @@ if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
       -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}
       -DBUILD_TESTING:BOOL=OFF
       -DCMAKE_MACOSX_RPATH:BOOL=0
-      # location of elastix.exe and transformix.exe in the build tree:
       -DCMAKE_RUNTIME_OUTPUT_DIRECTORY:PATH=${CMAKE_BINARY_DIR}/${Slicer_THIRDPARTY_BIN_DIR}
       -DCMAKE_LIBRARY_OUTPUT_DIRECTORY:PATH=${CMAKE_BINARY_DIR}/${Slicer_THIRDPARTY_LIB_DIR}
       -DCMAKE_ARCHIVE_OUTPUT_DIRECTORY:PATH=${CMAKE_ARCHIVE_OUTPUT_DIRECTORY} 
@@ -63,10 +61,6 @@ if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
     DEPENDS
       ${${proj}_DEPENDS}
     )
-  #set(${proj}_DIR ${${proj}_INSTALL_DIR})
-  #if(UNIX)
-  #  set(${proj}_DIR ${${proj}_INSTALL_DIR}/share/elastix)
-  #endif()
 
 else()
   ExternalProject_Add_Empty(${proj} DEPENDS ${${proj}_DEPENDS})
