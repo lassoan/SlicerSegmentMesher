@@ -331,6 +331,7 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
     self.binDirCandidates = [
       # install tree
+      os.path.join(self.scriptPath, '..'),
       os.path.join(self.scriptPath, '../../../bin'),
       # build tree
       os.path.join(self.scriptPath, '../../../../bin'),
