@@ -1,6 +1,6 @@
 # Segment Mesher extension
 
-This is an extenion for 3D Slicer for creating volumetric meshes from segmentation using Cleaver2 or TetGen.
+This is a 3D Slicer extension for creating volumetric meshes from segmentation using Cleaver2 or TetGen.
 
 <a href="https://sciinstitute.github.io/cleaver.pages">Cleaver2</a> mesher is freely usable, without any restrictions.
 <a href="http://www.tetgen.org">TetGen</a> mesher is only free for private, research, and educational use (see <a href="https://people.sc.fsu.edu/~jburkardt/examples/tetgen/license.txt">license</a> for details).
