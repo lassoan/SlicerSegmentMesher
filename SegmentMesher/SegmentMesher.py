@@ -419,10 +419,14 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     self.addLog("Generating volumetric mesh...")
     import subprocess
     
-    # Hide console window
-    info = subprocess.STARTUPINFO()
-    info.dwFlags = 1
-    info.wShowWindow = 0
+    # Hide console window on Windows
+    from sys import platform
+    if platform == "win32":
+      info = subprocess.STARTUPINFO()
+      info.dwFlags = 1
+      info.wShowWindow = 0
+    else:
+      info = None
     
     logging.info("Generate mesh using: "+executableFilePath+": "+repr(cmdLineArguments))
     return subprocess.Popen([executableFilePath] + cmdLineArguments,
