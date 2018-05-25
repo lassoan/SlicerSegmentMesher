@@ -31,7 +31,7 @@ This is a 3D Slicer extension for creating volumetric meshes from segmentation u
 
 ## Mesh generation parameters
 
-Cleaver parameters are described at https://sciinstitute.github.io/cleaver.pages/manual.html
+Cleaver parameters are described at https://sciinstitute.github.io/cleaver.pages/manual.html. Increase `--scale` parameter value to genereate a finer resolution mesh.
 
 TetGen parameters are described at http://wias-berlin.de/software/tetgen/1.5/doc/manual/manual005.html#sec%3Acmdline
 
