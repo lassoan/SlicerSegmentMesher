@@ -9,17 +9,25 @@ This is a 3D Slicer extension for creating volumetric meshes from segmentation u
 
 ## Installation
 
-* Download and install a recent nightly version of 3D Slicer (https://download.slicer.org).
+* Download and install a latest stable version of 3D Slicer (https://download.slicer.org).
 * Start 3D Slicer application, open the Extension Manager (menu: View / Extension manager)
 * Install SegmentMesher extension.
 
 ## Tutorial
 
 * Start 3D Slicer
-* Load a volume (for example: switch to SampleData module and load MRBrainTumor1 imaage)
-* Switch to Mesh Segmenter module (in Segmentation category)
+* Load a volume: switch to "Sample Data" module and load MRHead image
+* Switch to "Segment Editor" module
+* Add a new segment (it will contain the entire head)
+* Fill segment by thresholding: click "Threshold" effect set 30 as lower threshold, click "Apply"
+* Smooth segment: click "Smoothing" effect, set kernel size to 6mm, click "Apply"
+* Add a new segment (it will contain a spherical lesion)
+* Paint a sphere in the brain (simulating a lesion): click "Paint" effect, enable "Sphere brush", set "Diameter" to 8%, and click in the yellow slice view
+* Switch to "Segment Mesher" module (in Segmentation category)
 * Select "Create new Model" for Output model (this will contain the generated volumetric mesh)
 * Click Apply button and wait a about a minute
+* Inspect results: open "Display" section, enable "Yellow slice clipping", move slider at the top of yellor slice view to move the clipping plane; enable "Keep only whole cells when clipping" to see shape of mesh elements
+* Create more accurate mesh: open "Advanced" section, set scale parameter to 0.5, click "Apply", and wait a couple of minutes
 
 ## Visualize and save results
 * Open "Display" section to enable clipping with slices.
