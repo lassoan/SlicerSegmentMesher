@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 import unittest
 import vtk, qt, ctk, slicer
@@ -275,14 +276,14 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
       self.logic.logStandardOutput = self.showDetailedLogDuringExecutionCheckBox.checked
 
       method = self.methodSelectorComboBox.itemData(self.methodSelectorComboBox.currentIndex)
-      print method
+      print(method)
       if method == METHOD_CLEAVER:
         self.logic.createMeshFromSegmentationCleaver(self.inputModelSelector.currentNode(), self.outputModelSelector.currentNode(), self.cleaverAdditionalParametersWidget.text)
       else:
         self.logic.createMeshFromSegmentationTetGen(self.inputModelSelector.currentNode(), self.outputModelSelector.currentNode(), self.tetGenAdditionalParametersWidget.text)
 
     except Exception as e:
-      print e
+      print(e)
       self.addLog("Error: {0}".format(e.message))
       import traceback
       traceback.print_exc()
