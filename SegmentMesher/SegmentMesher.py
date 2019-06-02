@@ -686,7 +686,7 @@ class SegmentMesherTest(ScriptedLoadableModuleTest):
     outputModelNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode")
     outputModelNode.CreateDefaultDisplayNodes()
 
-    logic = TetGenLogic()
+    logic = SegmentMesherLogic()
     logic.createMeshFromPolyDataTetGen(inputModelNode.GetPolyData(), outputModelNode)
 
     self.assertTrue(outputModelNode.GetMesh().GetNumberOfPoints()>0)
