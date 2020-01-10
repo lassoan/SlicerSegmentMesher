@@ -41,6 +41,41 @@ This is a 3D Slicer extension for creating volumetric meshes from segmentation u
 
 Cleaver parameters are described at https://sciinstitute.github.io/cleaver.pages/manual.html. Increase `--scale` parameter value to generate a finer resolution mesh.
 
+```
+  Meshing mode (element size control):
+  -m [ --mesh_mode ] arg          Background mesh mode (structured [default], regular)
+                                  Structured means adaptive computation of element size.
+                                  Regular means constant element size.
+
+  For regular mode (constant element size):
+  -a [ --alpha ] arg              initial alpha value
+  -s [ --alpha_short ] arg        alpha short value (only for "regular" mesh_mode)
+  -l [ --alpha_long ] arg         alpha long value (onlu for "regular" mesh_mode)
+
+  For structured mode (adaptive element size):
+  -g [ --grading ] arg            sizing field grading: maximum rate of change of element size
+                                  (1 is uniform)
+  -x [ --multiplier ] arg         sizing field multiplier: feature size scaling
+                                  (higher values make a coarser mesh)
+  -c [ --scale ] arg              sizing field scale factor: volume sampling rate
+                                  (higher value makes finer mesh)
+
+  For prescribed sizing field (user-defined element size):
+  -z [ --sizing_field ] arg       optional input file containing sizing field
+
+  Other:
+  -B [ --blend_sigma ] arg        Sigma of Gaussian smoothing filter that is applied
+                                  to the input labelmap to remove step artifacts (anti-aliasing).
+                                  Higher values may shrink structures and remove small details.
+  --simple                        Use simple interface approximation.
+  -b [ --background_mesh ] arg    input background mesh
+  -w [ --write_background_mesh ]  write background mesh
+  -r [ --record ] arg             record operations on tets from input file.
+  -t [ --strict ]                 warnings become errors
+  -v [ --verbose ]                enable verbose output
+  -V [ --version ]                display version information
+```
+
 TetGen parameters are described at http://wias-berlin.de/software/tetgen/1.5/doc/manual/manual005.html#sec%3Acmdline
 
 ## Acknowledgments
