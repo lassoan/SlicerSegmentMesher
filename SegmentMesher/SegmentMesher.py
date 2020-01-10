@@ -136,14 +136,37 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     advancedFormLayout = qt.QFormLayout(self.advancedCollapsibleButton)
 
     self.cleaverAdditionalParametersWidget = qt.QLineEdit()
-    self.cleaverAdditionalParametersWidget.setToolTip('See description of parameters in module documentation ')
+    self.cleaverAdditionalParametersWidget.setToolTip('Increase --scale parameter value to generate a finer resolution mesh. See description of all parameters in module documentation (Help & Acknowledgment section).')
     advancedFormLayout.addRow("Cleaver meshing options:", self.cleaverAdditionalParametersWidget)
     self.cleaverAdditionalParametersWidget.text = "--scale 0.2 --multiplier 2 --grading 5"
 
+    self.cleaverRemoveBackgroundMeshCheckBox = qt.QCheckBox(" ")
+    self.cleaverRemoveBackgroundMeshCheckBox.checked = False
+    self.cleaverRemoveBackgroundMeshCheckBox.setToolTip("Remove background mesh (filling segmentation reference geometry box).")
+    advancedFormLayout.addRow("Cleaver remove background mesh:", self.cleaverRemoveBackgroundMeshCheckBox)
+
+    customCleaverPath = self.logic.getCustomCleaverPath()
+    self.customCleaverPathSelector = ctk.ctkPathLineEdit()
+    self.customCleaverPathSelector.setCurrentPath(customCleaverPath)
+    self.customCleaverPathSelector.nameFilters = [self.logic.cleaverFilename]
+    self.customCleaverPathSelector.setSizePolicy(qt.QSizePolicy.MinimumExpanding, qt.QSizePolicy.Preferred)
+    self.customCleaverPathSelector.setToolTip("Set cleaver-cli executable path. "
+      "If value is empty then cleaver-cli bundled with this extension will be used.")
+    advancedFormLayout.addRow("Custom Cleaver executable path:", self.customCleaverPathSelector)
+
     self.tetGenAdditionalParametersWidget = qt.QLineEdit()
-    self.tetGenAdditionalParametersWidget.setToolTip('See description of parameters in module documentation ')
+    self.tetGenAdditionalParametersWidget.setToolTip('See description of parameters in module documentation (Help & Acknowledgment section).')
     advancedFormLayout.addRow("TetGen meshing options:", self.tetGenAdditionalParametersWidget)
     self.tetGenAdditionalParametersWidget.text = ""
+
+    customTetGenPath = self.logic.getCustomTetGenPath()
+    self.customTetGenPathSelector = ctk.ctkPathLineEdit()
+    self.customTetGenPathSelector.setCurrentPath(customTetGenPath)
+    self.customTetGenPathSelector.nameFilters = [self.logic.tetGenFilename]
+    self.customTetGenPathSelector.setSizePolicy(qt.QSizePolicy.MinimumExpanding, qt.QSizePolicy.Preferred)
+    self.customTetGenPathSelector.setToolTip("Set tetgen executable path. "
+      "If value is empty then tetgen bundled with this extension will be used.")
+    advancedFormLayout.addRow("Custom TetGen executable path:", self.customTetGenPathSelector)
 
     self.showDetailedLogDuringExecutionCheckBox = qt.QCheckBox(" ")
     self.showDetailedLogDuringExecutionCheckBox.checked = False
@@ -162,24 +185,6 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     hbox.addWidget(self.keepTemporaryFilesCheckBox)
     hbox.addWidget(self.showTemporaryFilesFolderButton)
     advancedFormLayout.addRow("Keep temporary files:", hbox)
-
-    customCleaverPath = self.logic.getCustomCleaverPath()
-    self.customCleaverPathSelector = ctk.ctkPathLineEdit()
-    self.customCleaverPathSelector.setCurrentPath(customCleaverPath)
-    self.customCleaverPathSelector.nameFilters = [self.logic.cleaverFilename]
-    self.customCleaverPathSelector.setSizePolicy(qt.QSizePolicy.MinimumExpanding, qt.QSizePolicy.Preferred)
-    self.customCleaverPathSelector.setToolTip("Set cleaver-cli executable path. "
-      "If value is empty then cleaver-cli bundled with this extension will be used.")
-    advancedFormLayout.addRow("Custom Cleaver executable path:", self.customCleaverPathSelector)
-
-    customTetGenPath = self.logic.getCustomTetGenPath()
-    self.customTetGenPathSelector = ctk.ctkPathLineEdit()
-    self.customTetGenPathSelector.setCurrentPath(customTetGenPath)
-    self.customTetGenPathSelector.nameFilters = [self.logic.tetGenFilename]
-    self.customTetGenPathSelector.setSizePolicy(qt.QSizePolicy.MinimumExpanding, qt.QSizePolicy.Preferred)
-    self.customTetGenPathSelector.setToolTip("Set tetgen executable path. "
-      "If value is empty then tetgen bundled with this extension will be used.")
-    advancedFormLayout.addRow("Custom TetGen executable path:", self.customTetGenPathSelector)
 
     #
     # Display
@@ -278,13 +283,16 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
       method = self.methodSelectorComboBox.itemData(self.methodSelectorComboBox.currentIndex)
       print(method)
       if method == METHOD_CLEAVER:
-        self.logic.createMeshFromSegmentationCleaver(self.inputModelSelector.currentNode(), self.outputModelSelector.currentNode(), self.cleaverAdditionalParametersWidget.text)
+        self.logic.createMeshFromSegmentationCleaver(self.inputModelSelector.currentNode(),
+          self.outputModelSelector.currentNode(), self.cleaverAdditionalParametersWidget.text,
+          self.cleaverRemoveBackgroundMeshCheckBox.isChecked())
       else:
-        self.logic.createMeshFromSegmentationTetGen(self.inputModelSelector.currentNode(), self.outputModelSelector.currentNode(), self.tetGenAdditionalParametersWidget.text)
+        self.logic.createMeshFromSegmentationTetGen(self.inputModelSelector.currentNode(),
+          self.outputModelSelector.currentNode(), self.tetGenAdditionalParametersWidget.text)
 
     except Exception as e:
       print(e)
-      self.addLog("Error: {0}".format(e.message))
+      self.addLog("Error: {0}".format(str(e)))
       import traceback
       traceback.print_exc()
     finally:
@@ -471,7 +479,7 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     qt.QDir().mkpath(dirPath)
     return dirPath
 
-  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, additionalParameters="--scale 0.2 --multiplier 2 --grading 5"):
+  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, additionalParameters="--scale 0.2 --multiplier 2 --grading 5", removeBackgroundMesh = False):
 
     self.abortRequested = False
     tempDir = self.createTempDirectory()
@@ -482,8 +490,22 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     # Write inputs
     qt.QDir().mkpath(tempDir)
 
+    # Create temporary labelmap node. It will be used both for storing reference geometry
+    # and resulting merged labelmap.
     labelmapVolumeNode = slicer.mrmlScene.AddNewNodeByClass('vtkMRMLLabelMapVolumeNode')
-    slicer.modules.segmentations.logic().ExportAllSegmentsToLabelmapNode(inputSegmentation, labelmapVolumeNode)
+    parentTransformNode  = inputSegmentation.GetParentTransformNode()
+    labelmapVolumeNode.SetAndObserveTransformNodeID(parentTransformNode.GetID() if parentTransformNode else None)
+
+    # Set reference geometry in labelmapVolumeNode
+    referenceGeometry_Segmentation = slicer.vtkOrientedImageData()
+    inputSegmentation.GetSegmentation().SetImageGeometryFromCommonLabelmapGeometry(referenceGeometry_Segmentation, None,
+      slicer.vtkSegmentation.EXTENT_REFERENCE_GEOMETRY)
+    slicer.modules.segmentations.logic().CopyOrientedImageDataToVolumeNode(referenceGeometry_Segmentation, labelmapVolumeNode)
+
+    # Get merged labelmap
+    segmentIdList = vtk.vtkStringArray()
+    slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(inputSegmentation, segmentIdList, labelmapVolumeNode, labelmapVolumeNode)
+
     inputLabelmapVolumeFilePath = os.path.join(tempDir, "inputLabelmap.nrrd")
     slicer.util.saveNode(labelmapVolumeNode, inputLabelmapVolumeFilePath, {"useCompression": False})
     inputParamsCleaver.extend(["--input_files", inputLabelmapVolumeFilePath])
@@ -541,7 +563,19 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
       ijkToRasTransform.SetMatrix(unscaledIjkToRasMatrix)
       transformer.SetTransform(ijkToRasTransform)
 
-      outputMeshNode.SetUnstructuredGridConnection(transformer.GetOutputPort())
+      if removeBackgroundMesh:
+        transformer.Update()
+        mesh = transformer.GetOutput()
+        cellData = mesh.GetCellData()
+        cellData.SetActiveScalars("labels")
+        backgroundMeshRemover = vtk.vtkThreshold()
+        backgroundMeshRemover.SetInputData( mesh )
+        backgroundMeshRemover.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, vtk.vtkDataSetAttributes.SCALARS )
+        backgroundMeshRemover.ThresholdByUpper( 1 )
+        outputMeshNode.SetUnstructuredGridConnection(backgroundMeshRemover.GetOutputPort())
+      else:
+        outputMeshNode.SetUnstructuredGridConnection(transformer.GetOutputPort())
+
       outputMeshDisplayNode = outputMeshNode.GetDisplayNode()
       if not outputMeshDisplayNode:
         # Initial setup of display node
@@ -556,9 +590,10 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
         outputMeshDisplayNode.ScalarVisibilityOn()
         outputMeshDisplayNode.SetActiveScalarName('labels')
-        outputMeshDisplayNode.SetActiveAttributeLocation(vtk.vtkAssignAttribute.CELL_DATA);
+        outputMeshDisplayNode.SetActiveAttributeLocation(vtk.vtkAssignAttribute.CELL_DATA)
         outputMeshDisplayNode.SetSliceIntersectionVisibility(True)
         outputMeshDisplayNode.SetSliceIntersectionOpacity(0.5)
+        outputMeshDisplayNode.SetScalarRangeFlag(slicer.vtkMRMLDisplayNode.UseColorNodeScalarRange)
       else:
         currentColorNode = outputMeshDisplayNode.GetColorNode()
         if currentColorNode.GetType() == currentColorNode.User and currentColorNode.IsA("vtkMRMLColorTableNode"):
