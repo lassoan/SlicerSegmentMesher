@@ -78,6 +78,27 @@ Cleaver parameters are described at https://sciinstitute.github.io/cleaver.pages
 
 TetGen parameters are described at http://wias-berlin.de/software/tetgen/1.5/doc/manual/manual005.html#sec%3Acmdline
 
+## Developers
+
+### Split mesh to submeshes
+
+```python
+meshNode = getNode('Model')
+mesh = meshNode.GetMesh()
+cellData = mesh.GetCellData()
+labelsRange = cellData.GetArray("labels").GetRange()
+for labelValue in range(int(labelsRange[0]), int(labelsRange[1]+1)):
+    threshold = vtk.vtkThreshold()
+    threshold.SetInputData(mesh)
+    threshold.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, "labels")
+    threshold.ThresholdBetween(labelValue, labelValue)
+    threshold.Update()
+    if threshold.GetOutput().GetNumberOfPoints() > 0:
+        modelNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLModelNode", "{0}_{1}".format(meshNode.GetName(), labelValue))
+        modelNode.SetAndObserveMesh(threshold.GetOutput())
+        modelNode.CreateDefaultDisplayNodes()
+```
+
 ## Acknowledgments
 
 Cleaver is an Open Source software project that is principally funded through the SCI Institute's NIH/NIGMS CIBC Center. Please use the following acknowledgment and send references to any publications, presentations, or successful funding applications that make use of NIH/NIGMS CIBC software or data sets to <a href="http://www.sci.utah.edu/software/cleaver.html">SCI</a>: "This project was supported by the National Institute of General Medical Sciences of the National Institutes of Health under grant number P41 GM103545-18."
