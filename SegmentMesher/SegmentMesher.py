@@ -141,9 +141,16 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     self.cleaverAdditionalParametersWidget.text = "--scale 0.2 --multiplier 2 --grading 5"
 
     self.cleaverRemoveBackgroundMeshCheckBox = qt.QCheckBox(" ")
-    self.cleaverRemoveBackgroundMeshCheckBox.checked = False
+    self.cleaverRemoveBackgroundMeshCheckBox.checked = True
     self.cleaverRemoveBackgroundMeshCheckBox.setToolTip("Remove background mesh (filling segmentation reference geometry box).")
     advancedFormLayout.addRow("Cleaver remove background mesh:", self.cleaverRemoveBackgroundMeshCheckBox)
+
+    self.cleaverPaddingPercentSpinBox = qt.QSpinBox()
+    self.cleaverPaddingPercentSpinBox.maximum = 200
+    self.cleaverPaddingPercentSpinBox.value = 10
+    self.cleaverPaddingPercentSpinBox.suffix=" %"
+    self.cleaverPaddingPercentSpinBox.setToolTip("Add padding around the segments to ensure some minimum thickness to the background mesh. Increase value if segments have extrusions towards the edge of the padded bounding box.")
+    advancedFormLayout.addRow("Cleaver background padding:", self.cleaverPaddingPercentSpinBox)
 
     customCleaverPath = self.logic.getCustomCleaverPath()
     self.customCleaverPathSelector = ctk.ctkPathLineEdit()
@@ -285,7 +292,8 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
       if method == METHOD_CLEAVER:
         self.logic.createMeshFromSegmentationCleaver(self.inputModelSelector.currentNode(),
           self.outputModelSelector.currentNode(), self.cleaverAdditionalParametersWidget.text,
-          self.cleaverRemoveBackgroundMeshCheckBox.isChecked())
+          self.cleaverRemoveBackgroundMeshCheckBox.isChecked(),
+          self.cleaverPaddingPercentSpinBox.value * 0.01)
       else:
         self.logic.createMeshFromSegmentationTetGen(self.inputModelSelector.currentNode(),
           self.outputModelSelector.currentNode(), self.tetGenAdditionalParametersWidget.text)
@@ -479,7 +487,10 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     qt.QDir().mkpath(dirPath)
     return dirPath
 
-  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, additionalParameters="--scale 0.2 --multiplier 2 --grading 5", removeBackgroundMesh = False):
+  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, additionalParameters = None, removeBackgroundMesh = False, paddingRatio = 0.10):
+
+    if additionalParameters is None:
+      additionalParameters="--scale 0.2 --multiplier 2 --grading 5"
 
     self.abortRequested = False
     tempDir = self.createTempDirectory()
@@ -496,11 +507,26 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     parentTransformNode  = inputSegmentation.GetParentTransformNode()
     labelmapVolumeNode.SetAndObserveTransformNodeID(parentTransformNode.GetID() if parentTransformNode else None)
 
+    # Create binary labelmap representation using default parameters
+    if not inputSegmentation.GetSegmentation().CreateRepresentation(slicer.vtkSegmentationConverter.GetSegmentationBinaryLabelmapRepresentationName()):
+      self.addLog('Failed to create binary labelmap representation')
+      return
+
     # Set reference geometry in labelmapVolumeNode
     referenceGeometry_Segmentation = slicer.vtkOrientedImageData()
     inputSegmentation.GetSegmentation().SetImageGeometryFromCommonLabelmapGeometry(referenceGeometry_Segmentation, None,
       slicer.vtkSegmentation.EXTENT_REFERENCE_GEOMETRY)
     slicer.modules.segmentations.logic().CopyOrientedImageDataToVolumeNode(referenceGeometry_Segmentation, labelmapVolumeNode)
+
+    # Add margin
+    extent = labelmapVolumeNode.GetImageData().GetExtent()
+    paddedExtent = [0, -1, 0, -1, 0, -1]
+    for axisIndex in range(3):
+      paddingSizeVoxels = int((extent[axisIndex * 2 + 1] - extent[axisIndex * 2]) * paddingRatio)
+      paddedExtent[axisIndex * 2] = extent[axisIndex * 2] - paddingSizeVoxels
+      paddedExtent[axisIndex * 2 + 1] = extent[axisIndex * 2 + 1] + paddingSizeVoxels
+    labelmapVolumeNode.GetImageData().SetExtent(paddedExtent)
+    labelmapVolumeNode.ShiftImageDataExtentToZeroStart()
 
     # Get merged labelmap
     segmentIdList = vtk.vtkStringArray()
