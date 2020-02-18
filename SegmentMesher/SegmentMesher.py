@@ -609,6 +609,7 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
         outputMeshDisplayNode = outputMeshNode.GetDisplayNode()
         outputMeshDisplayNode.SetEdgeVisibility(True)
+        outputMeshDisplayNode.SetClipping(True)
 
         colorTableNode = slicer.mrmlScene.AddNode(colorTableNode)
         outputMeshDisplayNode.SetAndObserveColorNodeID(colorTableNode.GetID())
