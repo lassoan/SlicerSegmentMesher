@@ -595,9 +595,9 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
         cellData = mesh.GetCellData()
         cellData.SetActiveScalars("labels")
         backgroundMeshRemover = vtk.vtkThreshold()
-        backgroundMeshRemover.SetInputData( mesh )
-        backgroundMeshRemover.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, vtk.vtkDataSetAttributes.SCALARS )
-        backgroundMeshRemover.ThresholdByUpper( 1 )
+        backgroundMeshRemover.SetInputData(mesh)
+        backgroundMeshRemover.SetInputArrayToProcess(0, 0, 0, vtk.vtkDataObject.FIELD_ASSOCIATION_CELLS, vtk.vtkDataSetAttributes.SCALARS)
+        backgroundMeshRemover.ThresholdByUpper(1)
         outputMeshNode.SetUnstructuredGridConnection(backgroundMeshRemover.GetOutputPort())
       else:
         outputMeshNode.SetUnstructuredGridConnection(transformer.GetOutputPort())
@@ -609,7 +609,6 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
         outputMeshDisplayNode = outputMeshNode.GetDisplayNode()
         outputMeshDisplayNode.SetEdgeVisibility(True)
-        outputMeshDisplayNode.SetClipping(True)
 
         colorTableNode = slicer.mrmlScene.AddNode(colorTableNode)
         outputMeshDisplayNode.SetAndObserveColorNodeID(colorTableNode.GetID())
@@ -622,12 +621,17 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
         outputMeshDisplayNode.SetScalarRangeFlag(slicer.vtkMRMLDisplayNode.UseColorNodeScalarRange)
       else:
         currentColorNode = outputMeshDisplayNode.GetColorNode()
-        if currentColorNode.GetType() == currentColorNode.User and currentColorNode.IsA("vtkMRMLColorTableNode"):
+        if currentColorNode is not None and currentColorNode.GetType() == currentColorNode.User and currentColorNode.IsA("vtkMRMLColorTableNode"):
           # current color table node can be overwritten
           currentColorNode.Copy(colorTableNode)
         else:
           colorTableNode = slicer.mrmlScene.AddNode(colorTableNode)
           outputMeshDisplayNode.SetAndObserveColorNodeID(colorTableNode.GetID())
+
+      # Flip clipping setting twice, this workaround forces update of the display pipeline
+      # when switching between surface and volumetric mesh
+      outputMeshDisplayNode.SetClipping(not outputMeshDisplayNode.GetClipping())
+      outputMeshDisplayNode.SetClipping(not outputMeshDisplayNode.GetClipping())
 
     # Clean up
     if self.deleteTemporaryFiles:
