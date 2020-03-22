@@ -652,7 +652,13 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     appender = vtk.vtkAppendPolyData()
     for i in range(visibleSegmentIds.GetNumberOfValues()):
       segmentId = visibleSegmentIds.GetValue(i)
-      polydata = inputSegmentation.GetClosedSurfaceRepresentation(segmentId)
+
+      #Use old function arguments for 4.10 
+      if slicer.app.majorVersion == 4 and slicer.app.minorVersion < 11:
+      	polydata = inputSegmentation.GetClosedSurfaceRepresentation(segmentId)      	      	
+      else:
+      	polydata = vtk.vtkPolyData()
+      	inputSegmentation.GetClosedSurfaceRepresentation(segmentId, polydata)
       appender.AddInputData(polydata)
 
     appender.Update()
