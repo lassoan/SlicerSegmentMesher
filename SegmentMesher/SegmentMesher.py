@@ -93,8 +93,11 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     self.inputModelSelector.showHidden = False
     self.inputModelSelector.showChildNodeTypes = False
     self.inputModelSelector.setMRMLScene( slicer.mrmlScene )
-    self.inputModelSelector.setToolTip( "Volumetric mesh will be generated for all visible segments in this segmentation node." )
+    self.inputModelSelector.setToolTip( "Volumetric mesh will be generated from this segmentation node." )
     inputParametersFormLayout.addRow("Input segmentation: ", self.inputModelSelector)
+
+    self.segmentSelectorCombBox = ctk.ctkCheckableComboBox()
+    inputParametersFormLayout.addRow("Segment(s) to Mesh: ", self.segmentSelectorCombBox)
 
     self.inputSurfaceSelector = slicer.qMRMLNodeComboBox()
     self.inputSurfaceSelector.nodeTypes = ["vtkMRMLModelNode"]
@@ -325,6 +328,9 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     # Refresh Apply button state
     self.updateMRMLFromGUI()
 
+  def enter(self):
+    self.updateMRMLFromGUI()
+  
   def cleanup(self):
     pass
 
@@ -335,8 +341,25 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     
     #Enable correct input selections
     self.inputSurfaceSelector.enabled = self.tetgenUseSurface.isChecked() and method == METHOD_TETGEN
+    self.segmentSelectorCombBox.enabled = not (self.tetgenUseSurface.isChecked() and method == METHOD_TETGEN) and self.inputModelSelector.currentNode() is not None
     self.inputModelSelector.enabled = not (self.tetgenUseSurface.isChecked() and method == METHOD_TETGEN)
 
+    #populate segments 
+    inputSeg = self.inputModelSelector.currentNode()
+    oldIndex = self.segmentSelectorCombBox.checkedIndexes()
+    oldCount = self.segmentSelectorCombBox.count
+    self.segmentSelectorCombBox.clear()
+    if inputSeg is not None:
+      segmentIDs = vtk.vtkStringArray()
+      inputSeg.GetSegmentation().GetSegmentIDs(segmentIDs) 
+      for index in range(0, segmentIDs.GetNumberOfValues()):
+        self.segmentSelectorCombBox.addItem(segmentIDs.GetValue(index))
+
+    #Restore index - often we will be reloading the data from the same segmentation, so re-select items number of items is the same
+    if oldCount == self.segmentSelectorCombBox.count:
+      for index in oldIndex:
+        self.segmentSelectorCombBox.setCheckState(index, qt.Qt.Checked)
+    
     if method == METHOD_TETGEN:
       self.advancedTabWidget.setCurrentWidget(self.tetgenTab)
 
@@ -405,10 +428,18 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
       self.logic.logStandardOutput = self.showDetailedLogDuringExecutionCheckBox.checked
 
       method = self.methodSelectorComboBox.itemData(self.methodSelectorComboBox.currentIndex)
+
+      #Get list of segments to mesh
+      segmentIndexes = self.segmentSelectorCombBox.checkedIndexes()
+      segments = []
+
+      for index in segmentIndexes:
+        segments.append(self.segmentSelectorCombBox.itemText(index.row()))
+
       print(method)
       if method == METHOD_CLEAVER:
         self.logic.createMeshFromSegmentationCleaver(self.inputModelSelector.currentNode(),
-          self.outputModelSelector.currentNode(), self.cleaverAdditionalParametersWidget.text,
+          self.outputModelSelector.currentNode(), segments, self.cleaverAdditionalParametersWidget.text,
           self.cleaverRemoveBackgroundMeshCheckBox.isChecked(),
           self.cleaverPaddingPercentSpinBox.value * 0.01, self.cleaverScaleParameterWidget.value, self.cleaverMultiplierParameterWidget.value, self.cleaverGradingParameterWidget.value)
       else:
@@ -421,7 +452,7 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
             self.tetgenRatioParameterWidget.value, self.tetgenAngleParameterWidget.value, self.tetgenVolumeParameterWidget.value)
         else:
           self.logic.createMeshFromSegmentationTetGen(self.inputModelSelector.currentNode(),
-            self.outputModelSelector.currentNode(), self.tetGenAdditionalParametersWidget.text,
+            self.outputModelSelector.currentNode(), segments, self.tetGenAdditionalParametersWidget.text,
             self.tetgenRatioParameterWidget.value, self.tetgenAngleParameterWidget.value, self.tetgenVolumeParameterWidget.value)
 
     except Exception as e:
@@ -613,10 +644,11 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     qt.QDir().mkpath(dirPath)
     return dirPath
 
-  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, additionalParameters = None, removeBackgroundMesh = False, paddingRatio = 0.10, scale = 0.2, multiplier=0.5, grading=1.0):
+  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, segments = [], additionalParameters = None, removeBackgroundMesh = False, paddingRatio = 0.10, scale = 0.2, multiplier=0.5, grading=1.0):
 
     if additionalParameters is None:
       additionalParameters=""
+
 
     self.abortRequested = False
     tempDir = self.createTempDirectory()
@@ -656,7 +688,16 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
     # Get merged labelmap
     segmentIdList = vtk.vtkStringArray()
+    
+    for segment in segments:
+      segmentIdList.InsertNextValue(segment)
+
+    if segmentIdList.GetNumberOfValues() == 0:
+      logging.info("createMeshFromSegmentationCleaver skipped: there are no selected segments")
+      return
+      
     slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(inputSegmentation, segmentIdList, labelmapVolumeNode, labelmapVolumeNode)
+    
 
     inputLabelmapVolumeFilePath = os.path.join(tempDir, "inputLabelmap.nrrd")
     slicer.util.saveNode(labelmapVolumeNode, inputLabelmapVolumeFilePath, {"useCompression": False})
@@ -771,17 +812,19 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
     self.addLog("Model generation is completed")
 
-  def createMeshFromSegmentationTetGen(self, inputSegmentation, outputMeshNode, additionalParameters="", ratio=5, angle=0, volume=10):
+  def createMeshFromSegmentationTetGen(self, inputSegmentation, outputMeshNode, segments = [], additionalParameters="", ratio=5, angle=0, volume=10):
+    
+    segmentIdList = vtk.vtkStringArray()    
+    for segment in segments:
+      segmentIdList.InsertNextValue(segment)
 
-    visibleSegmentIds = vtk.vtkStringArray()
-    inputSegmentation.GetDisplayNode().GetVisibleSegmentIDs(visibleSegmentIds)
-    if visibleSegmentIds.GetNumberOfValues() == 0:
-      logging.info("createMeshFromSegmentationTetGen skipped: there are no visible segments")
+    if segmentIdList.GetNumberOfValues() == 0:
+      logging.info("createMeshFromSegmentationTetGen skipped: there are no selected segments")
       return
     inputSegmentation.CreateClosedSurfaceRepresentation()
     appender = vtk.vtkAppendPolyData()
-    for i in range(visibleSegmentIds.GetNumberOfValues()):
-      segmentId = visibleSegmentIds.GetValue(i)
+    for i in range(segmentIdList.GetNumberOfValues()):
+      segmentId = segmentIdList.GetValue(i)
 
       #Use old function arguments for 4.10 
       if slicer.app.majorVersion == 4 and slicer.app.minorVersion < 11:
