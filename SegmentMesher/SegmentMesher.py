@@ -136,9 +136,11 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     advancedFormLayout = qt.QFormLayout(self.advancedCollapsibleButton)
 
     self.cleaverAdditionalParametersWidget = qt.QLineEdit()
-    self.cleaverAdditionalParametersWidget.setToolTip('Increase --scale parameter value to generate a finer resolution mesh. See description of all parameters in module documentation (Help & Acknowledgment section).')
+    self.cleaverAdditionalParametersWidget.setToolTip("To make the output mesh elements smaller: decrease value of `--feature_scaling`. "
+      "To make the output mesh preserve small details (at the cost of more computation time and memory usage): increase `--sampling-rate` (up to 1.0). "
+      "See description of all meshing parameters in module documentation (Help & Acknowledgment section).")
     advancedFormLayout.addRow("Cleaver meshing options:", self.cleaverAdditionalParametersWidget)
-    self.cleaverAdditionalParametersWidget.text = "--scale 0.2 --multiplier 2 --grading 5"
+    self.cleaverAdditionalParametersWidget.text = "--feature_scaling 2 --sampling_rate 0.2"
 
     self.cleaverRemoveBackgroundMeshCheckBox = qt.QCheckBox(" ")
     self.cleaverRemoveBackgroundMeshCheckBox.checked = True
@@ -401,13 +403,13 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
   def getCustomCleaverPath(self):
     settings = qt.QSettings()
     if settings.contains(self.customCleaverPathSettingsKey):
-      return slicer.util.toVTKString(settings.value(self.customCleaverPathSettingsKey))
+      return settings.value(self.customCleaverPathSettingsKey)
     return ''
 
   def getCustomTetGenPath(self):
     settings = qt.QSettings()
     if settings.contains(self.customTetGenPathSettingsKey):
-      return slicer.util.toVTKString(settings.value(self.customTetGenPathSettingsKey))
+      return settings.value(self.customTetGenPathSettingsKey)
     return ''
 
   def setCustomCleaverPath(self, customPath):
@@ -447,7 +449,7 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
     logging.info("Generate mesh using: "+executableFilePath+": "+repr(cmdLineArguments))
     return subprocess.Popen([executableFilePath] + cmdLineArguments,
-                            stdout=subprocess.PIPE, universal_newlines=True, startupinfo=info)
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True, startupinfo=info)
 
   def logProcessOutput(self, process, processName):
     # save process output (if not logged) so that it can be displayed in case of an error
@@ -490,7 +492,7 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
   def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, additionalParameters = None, removeBackgroundMesh = False, paddingRatio = 0.10):
 
     if additionalParameters is None:
-      additionalParameters="--scale 0.2 --multiplier 2 --grading 5"
+      additionalParameters="--feature_scaling 2 --sampling_rate 0.2"
 
     self.abortRequested = False
     tempDir = self.createTempDirectory()
@@ -535,7 +537,6 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     inputLabelmapVolumeFilePath = os.path.join(tempDir, "inputLabelmap.nrrd")
     slicer.util.saveNode(labelmapVolumeNode, inputLabelmapVolumeFilePath, {"useCompression": False})
     inputParamsCleaver.extend(["--input_files", inputLabelmapVolumeFilePath])
-    inputParamsCleaver.append("--segmentation")
 
     # Keep IJK to RAS matrix, we'll need it later
     unscaledIjkToRasMatrix = vtk.vtkMatrix4x4()
@@ -562,7 +563,7 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     inputParamsCleaver.append("--verbose")
 
     # Quality
-    inputParamsCleaver.extend(slicer.util.toVTKString(additionalParameters).split(' '))
+    inputParamsCleaver.extend(additionalParameters.split(' '))
 
     # Run Cleaver
     ep = self.startMesher(inputParamsCleaver, self.getCleaverPath())

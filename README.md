@@ -39,41 +39,73 @@ This is a 3D Slicer extension for creating volumetric meshes from segmentation u
 
 ## Mesh generation parameters
 
-Cleaver parameters are described at https://sciinstitute.github.io/cleaver.pages/manual.html. Increase `--scale` parameter value to generate a finer resolution mesh.
+Cleaver parameters are described at https://sciinstitute.github.io/cleaver.pages/manual.html. To make the output mesh elements smaller: decrease value of `--feature_scaling`. To make the output mesh preserve small details (at the cost of more computation time and memory usage): increase `--sampling-rate` (up to 1.0).
 
 ```
+  Input data:
+  -i [ --input_files ] arg           material field paths or segmentation path
+                                     This argument is set automatically by SlicerSegmentMesher module.
+  -B [ --blend_sigma ] arg           blending function sigma for input(s) to
+                                     remove alias artifacts.
+                                     Too low value will not remove staircase artifacts.
+                                     Too high value may shrink structures and remove relevant details.
+                                     Default: 1.0.
+
+  Output data:
+  -f [ --output_format ] arg         output mesh format (tetgen [default],
+                                     scirun, matlab, vtkUSG, vtkPoly, ply
+                                     [surface mesh only])
+                                     This argument is set automatically by SlicerSegmentMesher module to vtkUSG.
+  -n [ --output_name ] arg           output mesh name (default 'output')
+                                     This argument is set automatically by SlicerSegmentMesher module.
+  -o [ --output_path ] arg           output path prefix
+                                     This argument is set automatically by SlicerSegmentMesher module.
+
   Meshing mode (element size control):
-  -m [ --mesh_mode ] arg          Background mesh mode (structured [default], regular)
-                                  Structured means adaptive computation of element size.
-                                  Regular means constant element size.
+  -m [ --element_sizing_method ] arg background mesh mode (adaptive [default],
+                                     constant)
 
-  For regular mode (constant element size):
-  -a [ --alpha ] arg              initial alpha value
-  -s [ --alpha_short ] arg        alpha short value (only for "regular" mesh_mode)
-  -l [ --alpha_long ] arg         alpha long value (onlu for "regular" mesh_mode)
+  For constant mode:
+  -a [ --alpha ] arg                 initial alpha value, default: 0.4
+  -s [ --alpha_short ] arg           alpha short value for constant element
+                                     sizing method, default: 0.203
+  -l [ --alpha_long ] arg            alpha long value for constant element
+                                     sizing method, default: 0.357
 
-  For structured mode (adaptive element size):
-  -g [ --grading ] arg            sizing field grading: maximum rate of change of element size
-                                  (1 is uniform)
-  -x [ --multiplier ] arg         sizing field multiplier: feature size scaling
-                                  (higher values make a coarser mesh)
-  -c [ --scale ] arg              sizing field scale factor: volume sampling rate
-                                  (higher value makes finer mesh)
+  For adaptive mode:
+  -F [ --feature_scaling ] arg       feature size scaling (higher values make a
+                                     coarser mesh), default: 1.0.
+                                     Meaningful range is about 0.2 to 5.0.
+                                     Lower value makes the output mesh finer,
+                                     higher value makes the output mesh coarser and meshing faster.
+  -L [ --lipschitz ] arg             maximum rate of change of element size (1
+                                     is uniform), default: 0.2
+  -R [ --sampling_rate ] arg         volume sampling rate (lower values make a
+                                     coarser mesh), default: 1.0 (full sampling)
+                                     Meaningful range is 0.1 to 1.0.
+                                     Lower value makes meshing faster, higher value
+                                     preserves fine details.
 
-  For prescribed sizing field (user-defined element size):
-  -z [ --sizing_field ] arg       optional input file containing sizing field
+  Advanced:
+  -b [ --background_mesh ] arg       input background mesh
+  -I [ --indicator_functions ]       the input files are indicator functions (boundary is defined as isosurface
+                                     where image value = 0)
+  -z [ --sizing_field ] arg          sizing field path (use precomputed sizing field for adaptive mode)
+  -w [ --write_background_mesh ]     write background mesh
+  --simple                           use simple interface approximation
+  -j [ --fix_tet_windup ]            ensure positive Jacobians with proper vertex wind-up
+                                     (prevents inside-out tetrahedra in the output mesh)
+                                     This flag is specified by SlicerSegmentMesher module, no need to specify it as additional option.
+  -e [ --strip_exterior ]            strip exterior tetrahedra (remove temporary elements that are added to make the volume cubic)
+                                     This flag is specified by SlicerSegmentMesher module, no need to specify it as additional option.
 
   Other:
-  -B [ --blend_sigma ] arg        Sigma of Gaussian smoothing filter that is applied
-                                  to the input labelmap to remove step artifacts (anti-aliasing).
-                                  Higher values may shrink structures and remove small details.
-  --simple                        Use simple interface approximation.
-  -b [ --background_mesh ] arg    input background mesh
-  -w [ --write_background_mesh ]  write background mesh
-  -r [ --record ] arg             record operations on tets from input file.
-  -t [ --strict ]                 warnings become errors
-  -v [ --verbose ]                enable verbose output
-  -V [ --version ]                display version information
+    -h [ --help ]                      display help message
+    -r [ --record ] arg                record operations on tets from input file
+    -t [ --strict ]                    warnings become errors
+    -v [ --verbose ]                   enable verbose output
+                                       This flag is specified by SlicerSegmentMesher module (based on Verbose option).
+    -V [ --version ]                   display version information
 ```
 
 TetGen parameters are described at http://wias-berlin.de/software/tetgen/1.5/doc/manual/manual005.html#sec%3Acmdline

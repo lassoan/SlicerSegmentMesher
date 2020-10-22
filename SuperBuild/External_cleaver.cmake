@@ -31,9 +31,8 @@ if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
     SOURCE_SUBDIR src # requires CMake 3.7 or later
     BINARY_DIR ${proj}-build
     INSTALL_DIR ${${proj}_INSTALL_DIR}
-    #GIT_REPOSITORY "${git_protocol}://github.com/SCIInstitute/Cleaver2.git"
-    GIT_REPOSITORY "${git_protocol}://github.com/lassoan/Cleaver2.git" # use this fork instead of official repository until packaging and build issues are resolved on all platforms
-    #GIT_TAG "ef057ff89233822b26b04b31c3c043af57d5deff"
+    GIT_REPOSITORY "${git_protocol}://github.com/SCIInstitute/Cleaver2.git"
+    GIT_TAG "4b37dab103ebfc86d26e282b33cbca724ef5fde5"
     #--Patch step-------------  
     #PATCH_COMMAND ${CMAKE_COMMAND} -Delastix_SRC_DIR=${CMAKE_BINARY_DIR}/${proj}
     #  -P ${CMAKE_CURRENT_LIST_DIR}/${proj}_patch.cmake
