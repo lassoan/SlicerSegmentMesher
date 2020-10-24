@@ -80,6 +80,8 @@ Cleaver parameters are described at https://sciinstitute.github.io/cleaver.pages
                                      higher value makes the output mesh coarser and meshing faster.
   -L [ --lipschitz ] arg             maximum rate of change of element size (1
                                      is uniform), default: 0.2
+                                     It specifies how quickly the sizing field may grow away from size-limiting
+                                     features (like corners or curved interfaces).
   -R [ --sampling_rate ] arg         volume sampling rate (lower values make a
                                      coarser mesh), default: 1.0 (full sampling)
                                      Meaningful range is 0.1 to 1.0.
