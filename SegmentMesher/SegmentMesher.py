@@ -129,11 +129,16 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     
     if method == METHOD_TETGEN:
       self.ui.advancedTabWidget.setCurrentWidget(self.ui.tetgenTab)
+      self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.cleaverTab), False)
+      self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.tetgenTab), True)      
+      self.ui.advancedTabWidget.setStyleSheet("QTabBar::tab::disabled {width: 0; height: 0; margin: 0; padding: 0; border: none;} ")
 
     if method == METHOD_CLEAVER:
       self.ui.advancedTabWidget.setCurrentWidget(self.ui.cleaverTab)
+      self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.tetgenTab), False)
+      self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.cleaverTab), True)
+      self.ui.advancedTabWidget.setStyleSheet("QTabBar::tab::disabled {width: 0; height: 0; margin: 0; padding: 0; border: none;} ")
     
-    enabled = True
     if method == METHOD_TETGEN and self.ui.tetgenUseSurface.isChecked():
       if not self.ui.inputSurfaceSelector.currentNode():
         self.ui.applyButton.text = "Select input surface"

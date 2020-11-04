@@ -198,8 +198,69 @@
       <item>
        <widget class="QTabWidget" name="advancedTabWidget">
         <property name="currentIndex">
-         <number>1</number>
+         <number>0</number>
         </property>
+        <widget class="QWidget" name="allTab">
+         <attribute name="title">
+          <string>General</string>
+         </attribute>
+         <layout class="QFormLayout" name="formLayout_6">
+          <item row="0" column="0">
+           <widget class="QLabel" name="detailedLogLabel">
+            <property name="text">
+             <string>Show detailed log:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="temporaryFilesLabel">
+            <property name="text">
+             <string>Keep temporary files:</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QCheckBox" name="showDetailedLogDuringExecutionCheckBox">
+            <property name="toolTip">
+             <string>Show detailed log during model generation.</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <layout class="QHBoxLayout" name="temporaryFilesLayout">
+            <item>
+             <widget class="QCheckBox" name="keepTemporaryFilesCheckBox">
+              <property name="toolTip">
+               <string>Keep temporary files (inputs, computed outputs, logs) after the model generation is completed.</string>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="showTemporaryFilesFolderButton">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="toolTip">
+               <string>Open the folder where temporary files are stored.</string>
+              </property>
+              <property name="text">
+               <string>Show temp folder</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+         </layout>
+        </widget>
         <widget class="QWidget" name="cleaverTab">
          <attribute name="title">
           <string>Cleaver</string>
@@ -481,67 +542,6 @@
              <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Set tetgen executable path. &lt;/p&gt;&lt;p&gt;If value is empty then tetgen bundled with this extension will be used.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
            </widget>
-          </item>
-         </layout>
-        </widget>
-        <widget class="QWidget" name="allTab">
-         <attribute name="title">
-          <string>General</string>
-         </attribute>
-         <layout class="QFormLayout" name="formLayout_6">
-          <item row="0" column="0">
-           <widget class="QLabel" name="detailedLogLabel">
-            <property name="text">
-             <string>Show detailed log:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="0">
-           <widget class="QLabel" name="temporaryFilesLabel">
-            <property name="text">
-             <string>Keep temporary files:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="0" column="1">
-           <widget class="QCheckBox" name="showDetailedLogDuringExecutionCheckBox">
-            <property name="toolTip">
-             <string>Show detailed log during model generation.</string>
-            </property>
-            <property name="text">
-             <string/>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="1">
-           <layout class="QHBoxLayout" name="temporaryFilesLayout">
-            <item>
-             <widget class="QCheckBox" name="keepTemporaryFilesCheckBox">
-              <property name="toolTip">
-               <string>Keep temporary files (inputs, computed outputs, logs) after the model generation is completed.</string>
-              </property>
-              <property name="text">
-               <string/>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="showTemporaryFilesFolderButton">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="MinimumExpanding" vsizetype="Preferred">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="toolTip">
-               <string>Open the folder where temporary files are stored.</string>
-              </property>
-              <property name="text">
-               <string>Show temp folder</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
           </item>
          </layout>
         </widget>
