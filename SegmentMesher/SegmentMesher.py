@@ -96,6 +96,19 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     self.inputModelSelector.setToolTip( "Volumetric mesh will be generated for all visible segments in this segmentation node." )
     inputParametersFormLayout.addRow("Input segmentation: ", self.inputModelSelector)
 
+    self.inputSurfaceSelector = slicer.qMRMLNodeComboBox()
+    self.inputSurfaceSelector.nodeTypes = ["vtkMRMLModelNode"]
+    self.inputSurfaceSelector.selectNodeUponCreation = True
+    self.inputSurfaceSelector.addEnabled = False
+    self.inputSurfaceSelector.removeEnabled = False
+    self.inputSurfaceSelector.noneEnabled = False
+    self.inputSurfaceSelector.showHidden = False
+    self.inputSurfaceSelector.showChildNodeTypes = False
+    self.inputSurfaceSelector.setMRMLScene( slicer.mrmlScene )
+    self.inputSurfaceSelector.setToolTip( "Volumetric mesh will be generated based on this surface - TetGen only." )
+    inputParametersFormLayout.addRow("Input surface (TetGen only): ", self.inputSurfaceSelector)
+    self.inputSurfaceSelector.enabled = False
+
 
     self.methodSelectorComboBox = qt.QComboBox()
     self.methodSelectorComboBox.addItem("Cleaver", METHOD_CLEAVER)
@@ -131,28 +144,69 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     #
     self.advancedCollapsibleButton = ctk.ctkCollapsibleButton()
     self.advancedCollapsibleButton.text = "Advanced"
-    self.advancedCollapsibleButton.collapsed = True
+    self.advancedCollapsibleButton.collapsed = False
     self.layout.addWidget(self.advancedCollapsibleButton)
-    advancedFormLayout = qt.QFormLayout(self.advancedCollapsibleButton)
+    advancedLayout = qt.QVBoxLayout(self.advancedCollapsibleButton)
+    
+    self.advancedTabWidget = qt.QTabWidget()
+    self.cleaverTab = qt.QWidget()
+    self.tetgenTab = qt.QWidget()
+    self.allTab = qt.QWidget()
 
+    advancedLayout.addWidget(self.advancedTabWidget)
+
+    self.advancedTabWidget.addTab(self.cleaverTab, 'Cleaver')
+    self.advancedTabWidget.addTab(self.tetgenTab, 'TetGen')
+    self.advancedTabWidget.addTab(self.allTab, 'General')
+    
+    advancedCleaverLayout = qt.QFormLayout(self.cleaverTab)
+    advancedTetGenLayout = qt.QFormLayout(self.tetgenTab)
+    advancedAllLayout = qt.QFormLayout(self.allTab)
+
+    self.cleaverScaleParameterWidget = qt.QDoubleSpinBox()
+    self.cleaverScaleParameterWidget.setToolTip('Increase --scale parameter value to generate a finer resolution mesh.')
+    advancedCleaverLayout.addRow("Scale (increase for finer mesh):", self.cleaverScaleParameterWidget)
+    self.cleaverScaleParameterWidget.value = 0.40
+    self.cleaverScaleParameterWidget.minimum = 0.0
+    self.cleaverScaleParameterWidget.maximum = 1.0
+    self.cleaverScaleParameterWidget.decimals = 2
+    self.cleaverScaleParameterWidget.singleStep = 0.01
+
+    self.cleaverMultiplierParameterWidget = qt.QDoubleSpinBox()
+    self.cleaverMultiplierParameterWidget.setToolTip('Increase --multiplier parameter value to generate a coarser resolution mesh.')
+    advancedCleaverLayout.addRow("Multiplier (increase for coarser mesh):", self.cleaverMultiplierParameterWidget)
+    self.cleaverMultiplierParameterWidget.value = 0.5
+    self.cleaverMultiplierParameterWidget.minimum = 0.0
+    self.cleaverMultiplierParameterWidget.maximum = 5.0
+    self.cleaverMultiplierParameterWidget.decimals = 2
+    self.cleaverMultiplierParameterWidget.singleStep = 0.1
+
+    self.cleaverGradingParameterWidget = qt.QDoubleSpinBox()
+    self.cleaverGradingParameterWidget.setToolTip('Increase --grading parameter value to allow more variation in element size  1 is uniform.')
+    advancedCleaverLayout.addRow("Grading (increase for more variation in element size):", self.cleaverGradingParameterWidget)
+    self.cleaverGradingParameterWidget.value = 1
+    self.cleaverGradingParameterWidget.minimum = 0.0
+    self.cleaverGradingParameterWidget.maximum = 10
+    self.cleaverGradingParameterWidget.decimals = 2
+    self.cleaverGradingParameterWidget.singleStep = 0.1
+    
+    
     self.cleaverAdditionalParametersWidget = qt.QLineEdit()
-    self.cleaverAdditionalParametersWidget.setToolTip("To make the output mesh elements smaller: decrease value of `--feature_scaling`. "
-      "To make the output mesh preserve small details (at the cost of more computation time and memory usage): increase `--sampling-rate` (up to 1.0). "
-      "See description of all meshing parameters in module documentation (Help & Acknowledgment section).")
-    advancedFormLayout.addRow("Cleaver meshing options:", self.cleaverAdditionalParametersWidget)
-    self.cleaverAdditionalParametersWidget.text = "--feature_scaling 2 --sampling_rate 0.2"
+    self.cleaverAdditionalParametersWidget.setToolTip('See description of all parameters in module documentation (Help & Acknowledgment section).')
+    advancedCleaverLayout.addRow("Additional command line options:", self.cleaverAdditionalParametersWidget)
+    self.cleaverAdditionalParametersWidget.text = ""
 
     self.cleaverRemoveBackgroundMeshCheckBox = qt.QCheckBox(" ")
     self.cleaverRemoveBackgroundMeshCheckBox.checked = True
     self.cleaverRemoveBackgroundMeshCheckBox.setToolTip("Remove background mesh (filling segmentation reference geometry box).")
-    advancedFormLayout.addRow("Cleaver remove background mesh:", self.cleaverRemoveBackgroundMeshCheckBox)
+    advancedCleaverLayout.addRow("Remove background mesh:", self.cleaverRemoveBackgroundMeshCheckBox)
 
     self.cleaverPaddingPercentSpinBox = qt.QSpinBox()
     self.cleaverPaddingPercentSpinBox.maximum = 200
     self.cleaverPaddingPercentSpinBox.value = 10
     self.cleaverPaddingPercentSpinBox.suffix=" %"
     self.cleaverPaddingPercentSpinBox.setToolTip("Add padding around the segments to ensure some minimum thickness to the background mesh. Increase value if segments have extrusions towards the edge of the padded bounding box.")
-    advancedFormLayout.addRow("Cleaver background padding:", self.cleaverPaddingPercentSpinBox)
+    advancedCleaverLayout.addRow("Background padding:", self.cleaverPaddingPercentSpinBox)
 
     customCleaverPath = self.logic.getCustomCleaverPath()
     self.customCleaverPathSelector = ctk.ctkPathLineEdit()
@@ -161,11 +215,43 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     self.customCleaverPathSelector.setSizePolicy(qt.QSizePolicy.MinimumExpanding, qt.QSizePolicy.Preferred)
     self.customCleaverPathSelector.setToolTip("Set cleaver-cli executable path. "
       "If value is empty then cleaver-cli bundled with this extension will be used.")
-    advancedFormLayout.addRow("Custom Cleaver executable path:", self.customCleaverPathSelector)
+    advancedCleaverLayout.addRow("Custom Cleaver executable path:", self.customCleaverPathSelector)
 
+    self.tetgenUseSurface = qt.QCheckBox()
+    self.tetgenUseSurface.setToolTip('Create mesh from surface instead of segmentation')
+    advancedTetGenLayout.addRow("Use a surface mesh as input:", self.tetgenUseSurface)
+    self.tetgenUseSurface.checked = qt.Qt.Unchecked
+
+    self.tetgenRatioParameterWidget = qt.QDoubleSpinBox()
+    self.tetgenRatioParameterWidget.setToolTip('Decrease maximum radius-edge ratio to generate more regular tetrahedra - will increase processing time.')
+    advancedTetGenLayout.addRow("Maximim radius-edge ratio (decrease for more regular mesh):", self.tetgenRatioParameterWidget)
+    self.tetgenRatioParameterWidget.value = 5.0
+    self.tetgenRatioParameterWidget.minimum = 1.0
+    self.tetgenRatioParameterWidget.maximum = 20
+    self.tetgenRatioParameterWidget.decimals = 1
+    self.tetgenRatioParameterWidget.singleStep = 0.1
+
+    self.tetgenAngleParameterWidget = qt.QDoubleSpinBox()
+    self.tetgenAngleParameterWidget.setToolTip('Increase minimum dihedral angle to generate more regular tetrahedra - will increase processing time.')
+    advancedTetGenLayout.addRow("Minimum dihedral angle (increase for more regular mesh):", self.tetgenAngleParameterWidget)
+    self.tetgenAngleParameterWidget.value = 5
+    self.tetgenAngleParameterWidget.minimum = 0
+    self.tetgenAngleParameterWidget.maximum = 180
+    self.tetgenAngleParameterWidget.decimals = 1
+    self.tetgenAngleParameterWidget.singleStep = 1
+
+    self.tetgenVolumeParameterWidget = qt.QDoubleSpinBox()
+    self.tetgenVolumeParameterWidget.setToolTip('Decrease maximum tetrahedron volume to generate finer tetrahedra - will increase processing time.')
+    advancedTetGenLayout.addRow("Maximum tetrahedron volume (decrease for finer mesh):", self.tetgenVolumeParameterWidget)
+    self.tetgenVolumeParameterWidget.value = 10
+    self.tetgenVolumeParameterWidget.minimum = 0
+    self.tetgenVolumeParameterWidget.maximum = 100000
+    self.tetgenVolumeParameterWidget.decimals = 1
+    self.tetgenVolumeParameterWidget.singleStep = 0.1
+    
     self.tetGenAdditionalParametersWidget = qt.QLineEdit()
     self.tetGenAdditionalParametersWidget.setToolTip('See description of parameters in module documentation (Help & Acknowledgment section).')
-    advancedFormLayout.addRow("TetGen meshing options:", self.tetGenAdditionalParametersWidget)
+    advancedTetGenLayout.addRow("TetGen meshing options:", self.tetGenAdditionalParametersWidget)
     self.tetGenAdditionalParametersWidget.text = ""
 
     customTetGenPath = self.logic.getCustomTetGenPath()
@@ -175,12 +261,12 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     self.customTetGenPathSelector.setSizePolicy(qt.QSizePolicy.MinimumExpanding, qt.QSizePolicy.Preferred)
     self.customTetGenPathSelector.setToolTip("Set tetgen executable path. "
       "If value is empty then tetgen bundled with this extension will be used.")
-    advancedFormLayout.addRow("Custom TetGen executable path:", self.customTetGenPathSelector)
+    advancedTetGenLayout.addRow("Custom TetGen executable path:", self.customTetGenPathSelector)
 
     self.showDetailedLogDuringExecutionCheckBox = qt.QCheckBox(" ")
     self.showDetailedLogDuringExecutionCheckBox.checked = False
     self.showDetailedLogDuringExecutionCheckBox.setToolTip("Show detailed log during model generation.")
-    advancedFormLayout.addRow("Show detailed log:", self.showDetailedLogDuringExecutionCheckBox)
+    advancedAllLayout.addRow("Show detailed log:", self.showDetailedLogDuringExecutionCheckBox)
 
     self.keepTemporaryFilesCheckBox = qt.QCheckBox(" ")
     self.keepTemporaryFilesCheckBox.checked = False
@@ -193,7 +279,7 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     hbox = qt.QHBoxLayout()
     hbox.addWidget(self.keepTemporaryFilesCheckBox)
     hbox.addWidget(self.showTemporaryFilesFolderButton)
-    advancedFormLayout.addRow("Keep temporary files:", hbox)
+    advancedAllLayout.addRow("Keep temporary files:", hbox)
 
     #
     # Display
@@ -231,6 +317,7 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     # Immediately update deleteTemporaryFiles in the logic to make it possible to decide to
     # keep the temporary file while the model generation is running
     self.keepTemporaryFilesCheckBox.connect("toggled(bool)", self.onKeepTemporaryFilesToggled)
+    self.tetgenUseSurface.connect("toggled(bool)", self.updateMRMLFromGUI)
 
     # Add vertical spacer
     self.layout.addStretch(1)
@@ -241,20 +328,48 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
   def cleanup(self):
     pass
 
+   
   def updateMRMLFromGUI(self):
+    
+    method = self.methodSelectorComboBox.itemData(self.methodSelectorComboBox.currentIndex)
+    
+    #Enable correct input selections
+    self.inputSurfaceSelector.enabled = self.tetgenUseSurface.isChecked() and method == METHOD_TETGEN
+    self.inputModelSelector.enabled = not (self.tetgenUseSurface.isChecked() and method == METHOD_TETGEN)
+
+    if method == METHOD_TETGEN:
+      self.advancedTabWidget.setCurrentWidget(self.tetgenTab)
+
+    if method == METHOD_CLEAVER:
+      self.advancedTabWidget.setCurrentWidget(self.cleaverTab)
+    
     enabled = True
-    if not self.inputModelSelector.currentNode():
-      self.applyButton.text = "Select input segmentation"
-      self.applyButton.enabled = False
-    elif not self.outputModelSelector.currentNode():
-      self.applyButton.text = "Select an output model node"
-      self.applyButton.enabled = False
-    elif self.inputModelSelector.currentNode() == self.outputModelSelector.currentNode():
-      self.applyButton.text = "Choose different Output model"
-      self.applyButton.enabled = False
+    if method == METHOD_TETGEN and self.tetgenUseSurface.isChecked():
+      if not self.inputSurfaceSelector.currentNode():
+        self.applyButton.text = "Select input surface"
+        self.applyButton.enabled = False
+      elif not self.outputModelSelector.currentNode():
+        self.applyButton.text = "Select an output model node"
+        self.applyButton.enabled = False
+      elif self.inputSurfaceSelector.currentNode() == self.outputModelSelector.currentNode():
+        self.applyButton.text = "Choose different Output model"
+        self.applyButton.enabled = False
+      else:
+        self.applyButton.text = "Apply"
+        self.applyButton.enabled = True
     else:
-      self.applyButton.text = "Apply"
-      self.applyButton.enabled = True
+      if not self.inputModelSelector.currentNode():
+        self.applyButton.text = "Select input segmentation"
+        self.applyButton.enabled = False
+      elif not self.outputModelSelector.currentNode():
+        self.applyButton.text = "Select an output model node"
+        self.applyButton.enabled = False
+      elif self.inputModelSelector.currentNode() == self.outputModelSelector.currentNode():
+        self.applyButton.text = "Choose different Output model"
+        self.applyButton.enabled = False
+      else:
+        self.applyButton.text = "Apply"
+        self.applyButton.enabled = True
 
   # def updateGUIFromMRML(self):
     # parameterNode = self.parameterNodeSelector.currentNode()
@@ -295,10 +410,19 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
         self.logic.createMeshFromSegmentationCleaver(self.inputModelSelector.currentNode(),
           self.outputModelSelector.currentNode(), self.cleaverAdditionalParametersWidget.text,
           self.cleaverRemoveBackgroundMeshCheckBox.isChecked(),
-          self.cleaverPaddingPercentSpinBox.value * 0.01)
+          self.cleaverPaddingPercentSpinBox.value * 0.01, self.cleaverScaleParameterWidget.value, self.cleaverMultiplierParameterWidget.value, self.cleaverGradingParameterWidget.value)
       else:
-        self.logic.createMeshFromSegmentationTetGen(self.inputModelSelector.currentNode(),
-          self.outputModelSelector.currentNode(), self.tetGenAdditionalParametersWidget.text)
+        if self.tetgenUseSurface.isChecked():
+          if self.inputSurfaceSelector.currentNode().GetUnstructuredGrid() is not None:
+            self.addLog("Error: Mesh must be a surface, not volumetric")
+            return
+          self.logic.createMeshFromPolyDataTetGen(self.inputSurfaceSelector.currentNode().GetPolyData(), 
+            self.outputModelSelector.currentNode(), self.tetGenAdditionalParametersWidget.text,
+            self.tetgenRatioParameterWidget.value, self.tetgenAngleParameterWidget.value, self.tetgenVolumeParameterWidget.value)
+        else:
+          self.logic.createMeshFromSegmentationTetGen(self.inputModelSelector.currentNode(),
+            self.outputModelSelector.currentNode(), self.tetGenAdditionalParametersWidget.text,
+            self.tetgenRatioParameterWidget.value, self.tetgenAngleParameterWidget.value, self.tetgenVolumeParameterWidget.value)
 
     except Exception as e:
       print(e)
@@ -489,10 +613,10 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     qt.QDir().mkpath(dirPath)
     return dirPath
 
-  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, additionalParameters = None, removeBackgroundMesh = False, paddingRatio = 0.10):
+  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, additionalParameters = None, removeBackgroundMesh = False, paddingRatio = 0.10, scale = 0.2, multiplier=0.5, grading=1.0):
 
     if additionalParameters is None:
-      additionalParameters="--feature_scaling 2 --sampling_rate 0.2"
+      additionalParameters=""
 
     self.abortRequested = False
     tempDir = self.createTempDirectory()
@@ -553,6 +677,11 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     slicer.mrmlScene.RemoveNode(labelmapVolumeNode)
     slicer.mrmlScene.RemoveNode(colorTableNode)
 
+    #User set parameters
+    inputParamsCleaver.extend(["--scale", str(scale)])
+    inputParamsCleaver.extend(["--multiplier", str(multiplier)])
+    inputParamsCleaver.extend(["--grading", str(grading)])
+    
     # Set up output format
 
     inputParamsCleaver.extend(["--output_path", tempDir+"/"])
@@ -642,7 +771,7 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
     self.addLog("Model generation is completed")
 
-  def createMeshFromSegmentationTetGen(self, inputSegmentation, outputMeshNode, additionalParameters=""):
+  def createMeshFromSegmentationTetGen(self, inputSegmentation, outputMeshNode, additionalParameters="", ratio=5, angle=0, volume=10):
 
     visibleSegmentIds = vtk.vtkStringArray()
     inputSegmentation.GetDisplayNode().GetVisibleSegmentIDs(visibleSegmentIds)
@@ -663,9 +792,12 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
       appender.AddInputData(polydata)
 
     appender.Update()
-    self.createMeshFromPolyDataTetGen(appender.GetOutput(), outputMeshNode, additionalParameters)
+    self.createMeshFromPolyDataTetGen(appender.GetOutput(), outputMeshNode, additionalParameters, ratio, angle, volume)
 
-  def createMeshFromPolyDataTetGen(self, inputPolyData, outputMeshNode, additionalParameters=""):
+    #Clean up representation
+    inputSegmentation.GetSegmentation().RemoveRepresentation(slicer.vtkSegmentationConverter().GetClosedSurfaceRepresentationName())
+
+  def createMeshFromPolyDataTetGen(self, inputPolyData, outputMeshNode, additionalParameters="", ratio=5, angle=0, volume=10):
 
     self.abortRequested = False
     tempDir = self.createTempDirectory()
@@ -681,8 +813,11 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     inputWriter.SetFileTypeToASCII()
     inputWriter.Write()
 
+    #Command line for quality parameters
+    parameters = 'q'+str(ratio)+'/'+str(angle)+'a'+str(volume)
+
     inputParamsTetGen = []
-    inputParamsTetGen.append("-k"+additionalParameters)
+    inputParamsTetGen.append("-k"+parameters+additionalParameters)
     inputParamsTetGen.append(inputSurfaceMeshFilePath)
 
     # Run tetgen
@@ -761,7 +896,7 @@ class SegmentMesherTest(ScriptedLoadableModuleTest):
     outputModelNode.CreateDefaultDisplayNodes()
 
     logic = SegmentMesherLogic()
-    logic.createMeshFromPolyDataTetGen(inputModelNode.GetPolyData(), outputModelNode)
+    logic.createMeshFromPolyDataTetGen(inputModelNode.GetPolyData(), outputModelNode, '', 100, 0, 100)
 
     self.assertTrue(outputModelNode.GetMesh().GetNumberOfPoints()>0)
     self.assertTrue(outputModelNode.GetMesh().GetNumberOfCells()>0)
