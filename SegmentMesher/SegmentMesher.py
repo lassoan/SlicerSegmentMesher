@@ -491,9 +491,9 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     slicer.mrmlScene.RemoveNode(colorTableNode)
 
     #User set parameters
-    inputParamsCleaver.extend(["--scale", str(scale)])
-    inputParamsCleaver.extend(["--multiplier", str(multiplier)])
-    inputParamsCleaver.extend(["--grading", str(grading)])
+    inputParamsCleaver.extend(["--scale", "{:.2f}".format(scale)])
+    inputParamsCleaver.extend(["--multiplier", "{:.2f}".format(multiplier)])
+    inputParamsCleaver.extend(["--grading", "{:.2f}".format(grading)])
     
     # Set up output format
 
@@ -629,7 +629,7 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     inputWriter.Write()
 
     #Command line for quality parameters
-    parameters = 'q'+str(ratio)+'/'+str(angle)+'a'+str(volume)
+    parameters = 'q'+"{:.2f}".format(ratio)+'/'+"{:.2f}".format(angle)+'a'+"{:.2f}".format(volume)
 
     inputParamsTetGen = []
     inputParamsTetGen.append("-k"+parameters+additionalParameters)
