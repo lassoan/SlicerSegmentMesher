@@ -213,7 +213,7 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
         self.logic.createMeshFromSegmentationCleaver(self.ui.inputModelSelector.currentNode(),
           self.ui.outputModelSelector.currentNode(), segments, self.ui.cleaverAdditionalParametersWidget.text,
           self.ui.cleaverRemoveBackgroundMeshCheckBox.isChecked(),
-          self.ui.cleaverPaddingPercentSpinBox.value * 0.01, self.ui.cleaverScaleParameterWidget.value, self.ui.cleaverMultiplierParameterWidget.value, self.ui.cleaverGradingParameterWidget.value)
+          self.ui.cleaverPaddingPercentSpinBox.value * 0.01, self.ui.cleaverFeatureScalingParameterWidget.value, self.ui.cleaverSamplingParameterWidget.value, self.ui.cleaverRateParameterWidget.value)
       else:
         if self.ui.tetgenUseSurface.isChecked():
           if self.ui.inputSurfaceSelector.currentNode().GetUnstructuredGrid() is not None:
@@ -416,7 +416,8 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     qt.QDir().mkpath(dirPath)
     return dirPath
 
-  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, segments = [], additionalParameters = None, removeBackgroundMesh = False, paddingRatio = 0.10, scale = 0.2, multiplier=0.5, grading=1.0):
+  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, segments = [], additionalParameters = None, removeBackgroundMesh = False, 
+    paddingRatio = 0.10, featureScale = 2, samplingRate=0.2, rateOfChange=0.2):
 
     if additionalParameters is None:
       additionalParameters=""
@@ -491,9 +492,9 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     slicer.mrmlScene.RemoveNode(colorTableNode)
 
     #User set parameters
-    inputParamsCleaver.extend(["--scale", "{:.2f}".format(scale)])
-    inputParamsCleaver.extend(["--multiplier", "{:.2f}".format(multiplier)])
-    inputParamsCleaver.extend(["--grading", "{:.2f}".format(grading)])
+    inputParamsCleaver.extend(["--feature_scaling", "{:.2f}".format(featureScale)])
+    inputParamsCleaver.extend(["--sampling_rate", "{:.2f}".format(samplingRate)])
+    inputParamsCleaver.extend(["--lipschitz", "{:.2f}".format(rateOfChange)])
     
     # Set up output format
 

@@ -198,7 +198,7 @@
       <item>
        <widget class="QTabWidget" name="advancedTabWidget">
         <property name="currentIndex">
-         <number>0</number>
+         <number>1</number>
         </property>
         <widget class="QWidget" name="allTab">
          <attribute name="title">
@@ -267,23 +267,23 @@
          </attribute>
          <layout class="QFormLayout" name="formLayout_4">
           <item row="0" column="0">
-           <widget class="QLabel" name="cleaverScaleLabel">
+           <widget class="QLabel" name="cleaverScalingLabel">
             <property name="text">
-             <string>Scale (increase for finer mesh):</string>
+             <string>Feature scaling (increase for coarser mesh):</string>
             </property>
            </widget>
           </item>
           <item row="1" column="0">
-           <widget class="QLabel" name="cleaverMultiplierLabel">
+           <widget class="QLabel" name="cleaverSamplingLabel">
             <property name="text">
-             <string>Multiplier (increase for coarser mesh):</string>
+             <string>Sampling Rate (increase for finer details):</string>
             </property>
            </widget>
           </item>
           <item row="2" column="0">
-           <widget class="QLabel" name="cleaverGradingLabel">
+           <widget class="QLabel" name="cleaverRateLabel">
             <property name="text">
-             <string>Grading (increase for more variation in element size):</string>
+             <string>Rate of change of element size:</string>
             </property>
            </widget>
           </item>
@@ -295,25 +295,12 @@
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QDoubleSpinBox" name="cleaverScaleParameterWidget">
+           <widget class="QDoubleSpinBox" name="cleaverFeatureScalingParameterWidget">
             <property name="toolTip">
-             <string>Increase --scale parameter value to generate a finer resolution mesh.</string>
+             <string>To make the output mesh elements smaller: decrease value of `--feature_scaling`. </string>
             </property>
-            <property name="maximum">
-             <double>1.000000000000000</double>
-            </property>
-            <property name="singleStep">
-             <double>0.010000000000000</double>
-            </property>
-            <property name="value">
-             <double>0.400000000000000</double>
-            </property>
-           </widget>
-          </item>
-          <item row="1" column="1">
-           <widget class="QDoubleSpinBox" name="cleaverMultiplierParameterWidget">
-            <property name="toolTip">
-             <string>Increase --multiplier parameter value to generate a coarser resolution mesh.</string>
+            <property name="minimum">
+             <double>0.200000000000000</double>
             </property>
             <property name="maximum">
              <double>5.000000000000000</double>
@@ -322,23 +309,42 @@
              <double>0.100000000000000</double>
             </property>
             <property name="value">
-             <double>0.500000000000000</double>
+             <double>2.000000000000000</double>
             </property>
            </widget>
           </item>
-          <item row="2" column="1">
-           <widget class="QDoubleSpinBox" name="cleaverGradingParameterWidget">
+          <item row="1" column="1">
+           <widget class="QDoubleSpinBox" name="cleaverSamplingParameterWidget">
             <property name="toolTip">
-             <string>Increase --grading parameter value to allow more variation in element size  1 is uniform.</string>
+             <string>To make the output mesh preserve small details (at the cost of more computation time and memory usage): increase `--sampling-rate` (up to 1.0). </string>
+            </property>
+            <property name="minimum">
+             <double>0.100000000000000</double>
             </property>
             <property name="maximum">
-             <double>10.000000000000000</double>
+             <double>1.000000000000000</double>
             </property>
             <property name="singleStep">
              <double>0.100000000000000</double>
             </property>
             <property name="value">
+             <double>0.200000000000000</double>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QDoubleSpinBox" name="cleaverRateParameterWidget">
+            <property name="toolTip">
+             <string>Increase parameter value to allow more variation in element size,  1 is uniform.</string>
+            </property>
+            <property name="maximum">
              <double>1.000000000000000</double>
+            </property>
+            <property name="singleStep">
+             <double>0.100000000000000</double>
+            </property>
+            <property name="value">
+             <double>0.200000000000000</double>
             </property>
            </widget>
           </item>
