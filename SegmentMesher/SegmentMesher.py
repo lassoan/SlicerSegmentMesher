@@ -3,6 +3,7 @@ import os
 import unittest
 import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
+from slicer.util import VTKObservationMixin
 import logging
 
 #
@@ -38,10 +39,20 @@ This module was originally developed by Andras Lasso (Queen's University, PerkLa
 # SegmentMesherWidget
 #
 
-class SegmentMesherWidget(ScriptedLoadableModuleWidget):
+class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
   """Uses ScriptedLoadableModuleWidget base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
+
+  def __init__(self, parent=None):
+    """
+    Called when the user opens the module the first time and the widget is initialized.
+    """
+    ScriptedLoadableModuleWidget.__init__(self, parent)
+    VTKObservationMixin.__init__(self)  # needed for parameter node observation
+    self.logic = None
+    self._parameterNode = None
+    self._updatingGUIFromParameterNode = False
 
   def setup(self):
     ScriptedLoadableModuleWidget.setup(self)
@@ -50,211 +61,310 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     self.logic.logCallback = self.addLog
     self.modelGenerationInProgress = False
 
-    # Instantiate and connect widgets ...
+    uiWidget = slicer.util.loadUI(self.resourcePath('UI/SegmentMesher.ui'))
+    self.layout.addWidget(uiWidget)
+    self.ui = slicer.util.childWidgetVariables(uiWidget)
+    uiWidget.setPalette(slicer.util.mainWindow().style().standardPalette())
 
-    # Parameter sets
-    defaultinputParametersCollapsibleButton = ctk.ctkCollapsibleButton()
-    defaultinputParametersCollapsibleButton.text = "Parameter set"
-    defaultinputParametersCollapsibleButton.collapsed = True
-    self.layout.addWidget(defaultinputParametersCollapsibleButton)
-    defaultParametersLayout = qt.QFormLayout(defaultinputParametersCollapsibleButton)
+    # Finish UI setup ...    
+    self.ui.parameterNodeSelector.addAttribute( "vtkMRMLScriptedModuleNode", "ModuleName", "SegmentMesher" )    
+    self.ui.parameterNodeSelector.setMRMLScene( slicer.mrmlScene )    
+    self.ui.inputModelSelector.setMRMLScene( slicer.mrmlScene )    
+    self.ui.inputSurfaceSelector.setMRMLScene( slicer.mrmlScene )
+    self.ui.outputModelSelector.setMRMLScene( slicer.mrmlScene )
 
-    self.parameterNodeSelector = slicer.qMRMLNodeComboBox()
-    self.parameterNodeSelector.nodeTypes = ["vtkMRMLScriptedModuleNode"]
-    self.parameterNodeSelector.addAttribute( "vtkMRMLScriptedModuleNode", "ModuleName", "SegmentMesher" )
-    self.parameterNodeSelector.selectNodeUponCreation = True
-    self.parameterNodeSelector.addEnabled = True
-    self.parameterNodeSelector.renameEnabled = True
-    self.parameterNodeSelector.removeEnabled = True
-    self.parameterNodeSelector.noneEnabled = False
-    self.parameterNodeSelector.showHidden = True
-    self.parameterNodeSelector.showChildNodeTypes = False
-    self.parameterNodeSelector.baseName = "SegmentMesher"
-    self.parameterNodeSelector.setMRMLScene( slicer.mrmlScene )
-    self.parameterNodeSelector.setToolTip( "Pick parameter set" )
-    defaultParametersLayout.addRow("Parameter set: ", self.parameterNodeSelector)
-
-    #
-    # Inputs
-    #
-    inputParametersCollapsibleButton = ctk.ctkCollapsibleButton()
-    inputParametersCollapsibleButton.text = "Inputs"
-    self.layout.addWidget(inputParametersCollapsibleButton)
-
-    # Layout within the dummy collapsible button
-    inputParametersFormLayout = qt.QFormLayout(inputParametersCollapsibleButton)
-
-    self.inputModelSelector = slicer.qMRMLNodeComboBox()
-    self.inputModelSelector.nodeTypes = ["vtkMRMLSegmentationNode"]
-    self.inputModelSelector.selectNodeUponCreation = True
-    self.inputModelSelector.addEnabled = False
-    self.inputModelSelector.removeEnabled = False
-    self.inputModelSelector.noneEnabled = False
-    self.inputModelSelector.showHidden = False
-    self.inputModelSelector.showChildNodeTypes = False
-    self.inputModelSelector.setMRMLScene( slicer.mrmlScene )
-    self.inputModelSelector.setToolTip( "Volumetric mesh will be generated for all visible segments in this segmentation node." )
-    inputParametersFormLayout.addRow("Input segmentation: ", self.inputModelSelector)
-
-
-    self.methodSelectorComboBox = qt.QComboBox()
-    self.methodSelectorComboBox.addItem("Cleaver", METHOD_CLEAVER)
-    self.methodSelectorComboBox.addItem("TetGen", METHOD_TETGEN)
-    inputParametersFormLayout.addRow("Meshing method: ", self.methodSelectorComboBox)
-
-    #
-    # Outputs
-    #
-    outputParametersCollapsibleButton = ctk.ctkCollapsibleButton()
-    outputParametersCollapsibleButton.text = "Outputs"
-    self.layout.addWidget(outputParametersCollapsibleButton)
-    outputParametersFormLayout = qt.QFormLayout(outputParametersCollapsibleButton)
-
-    #
-    # output volume selector
-    #
-    self.outputModelSelector = slicer.qMRMLNodeComboBox()
-    self.outputModelSelector.nodeTypes = ["vtkMRMLModelNode"]
-    self.outputModelSelector.selectNodeUponCreation = True
-    self.outputModelSelector.addEnabled = True
-    self.outputModelSelector.renameEnabled = True
-    self.outputModelSelector.removeEnabled = True
-    self.outputModelSelector.noneEnabled = False
-    self.outputModelSelector.showHidden = False
-    self.outputModelSelector.showChildNodeTypes = False
-    self.outputModelSelector.setMRMLScene( slicer.mrmlScene )
-    self.outputModelSelector.setToolTip( "Created volumetric mesh" )
-    outputParametersFormLayout.addRow("Output model: ", self.outputModelSelector)
-
-    #
-    # Advanced area
-    #
-    self.advancedCollapsibleButton = ctk.ctkCollapsibleButton()
-    self.advancedCollapsibleButton.text = "Advanced"
-    self.advancedCollapsibleButton.collapsed = True
-    self.layout.addWidget(self.advancedCollapsibleButton)
-    advancedFormLayout = qt.QFormLayout(self.advancedCollapsibleButton)
-
-    self.cleaverAdditionalParametersWidget = qt.QLineEdit()
-    self.cleaverAdditionalParametersWidget.setToolTip("To make the output mesh elements smaller: decrease value of `--feature_scaling`. "
-      "To make the output mesh preserve small details (at the cost of more computation time and memory usage): increase `--sampling-rate` (up to 1.0). "
-      "See description of all meshing parameters in module documentation (Help & Acknowledgment section).")
-    advancedFormLayout.addRow("Cleaver meshing options:", self.cleaverAdditionalParametersWidget)
-    self.cleaverAdditionalParametersWidget.text = "--feature_scaling 2 --sampling_rate 0.2"
-
-    self.cleaverRemoveBackgroundMeshCheckBox = qt.QCheckBox(" ")
-    self.cleaverRemoveBackgroundMeshCheckBox.checked = True
-    self.cleaverRemoveBackgroundMeshCheckBox.setToolTip("Remove background mesh (filling segmentation reference geometry box).")
-    advancedFormLayout.addRow("Cleaver remove background mesh:", self.cleaverRemoveBackgroundMeshCheckBox)
-
-    self.cleaverPaddingPercentSpinBox = qt.QSpinBox()
-    self.cleaverPaddingPercentSpinBox.maximum = 200
-    self.cleaverPaddingPercentSpinBox.value = 10
-    self.cleaverPaddingPercentSpinBox.suffix=" %"
-    self.cleaverPaddingPercentSpinBox.setToolTip("Add padding around the segments to ensure some minimum thickness to the background mesh. Increase value if segments have extrusions towards the edge of the padded bounding box.")
-    advancedFormLayout.addRow("Cleaver background padding:", self.cleaverPaddingPercentSpinBox)
+    self.ui.methodSelectorComboBox.addItem("Cleaver", METHOD_CLEAVER)
+    self.ui.methodSelectorComboBox.addItem("TetGen", METHOD_TETGEN)    
 
     customCleaverPath = self.logic.getCustomCleaverPath()
-    self.customCleaverPathSelector = ctk.ctkPathLineEdit()
-    self.customCleaverPathSelector.setCurrentPath(customCleaverPath)
-    self.customCleaverPathSelector.nameFilters = [self.logic.cleaverFilename]
-    self.customCleaverPathSelector.setSizePolicy(qt.QSizePolicy.MinimumExpanding, qt.QSizePolicy.Preferred)
-    self.customCleaverPathSelector.setToolTip("Set cleaver-cli executable path. "
-      "If value is empty then cleaver-cli bundled with this extension will be used.")
-    advancedFormLayout.addRow("Custom Cleaver executable path:", self.customCleaverPathSelector)
-
-    self.tetGenAdditionalParametersWidget = qt.QLineEdit()
-    self.tetGenAdditionalParametersWidget.setToolTip('See description of parameters in module documentation (Help & Acknowledgment section).')
-    advancedFormLayout.addRow("TetGen meshing options:", self.tetGenAdditionalParametersWidget)
-    self.tetGenAdditionalParametersWidget.text = ""
+    self.ui.customCleaverPathSelector.setCurrentPath(customCleaverPath)
+    self.ui.customCleaverPathSelector.nameFilters = [self.logic.cleaverFilename]    
 
     customTetGenPath = self.logic.getCustomTetGenPath()
-    self.customTetGenPathSelector = ctk.ctkPathLineEdit()
-    self.customTetGenPathSelector.setCurrentPath(customTetGenPath)
-    self.customTetGenPathSelector.nameFilters = [self.logic.tetGenFilename]
-    self.customTetGenPathSelector.setSizePolicy(qt.QSizePolicy.MinimumExpanding, qt.QSizePolicy.Preferred)
-    self.customTetGenPathSelector.setToolTip("Set tetgen executable path. "
-      "If value is empty then tetgen bundled with this extension will be used.")
-    advancedFormLayout.addRow("Custom TetGen executable path:", self.customTetGenPathSelector)
-
-    self.showDetailedLogDuringExecutionCheckBox = qt.QCheckBox(" ")
-    self.showDetailedLogDuringExecutionCheckBox.checked = False
-    self.showDetailedLogDuringExecutionCheckBox.setToolTip("Show detailed log during model generation.")
-    advancedFormLayout.addRow("Show detailed log:", self.showDetailedLogDuringExecutionCheckBox)
-
-    self.keepTemporaryFilesCheckBox = qt.QCheckBox(" ")
-    self.keepTemporaryFilesCheckBox.checked = False
-    self.keepTemporaryFilesCheckBox.setToolTip("Keep temporary files (inputs, computed outputs, logs) after the model generation is completed.")
-
-    self.showTemporaryFilesFolderButton = qt.QPushButton("Show temp folder")
-    self.showTemporaryFilesFolderButton.toolTip = "Open the folder where temporary files are stored."
-    self.showTemporaryFilesFolderButton.setSizePolicy(qt.QSizePolicy.MinimumExpanding, qt.QSizePolicy.Preferred)
-
-    hbox = qt.QHBoxLayout()
-    hbox.addWidget(self.keepTemporaryFilesCheckBox)
-    hbox.addWidget(self.showTemporaryFilesFolderButton)
-    advancedFormLayout.addRow("Keep temporary files:", hbox)
-
-    #
-    # Display
-    #
-    displayParametersCollapsibleButton = ctk.ctkCollapsibleButton()
-    displayParametersCollapsibleButton.text = "Display"
-    displayParametersCollapsibleButton.collapsed = True
-    self.layout.addWidget(displayParametersCollapsibleButton)
-    displayParametersFormLayout = qt.QFormLayout(displayParametersCollapsibleButton)
-
-    self.clipNodeWidget=slicer.qMRMLClipNodeWidget()
+    self.ui.customTetGenPathSelector.setCurrentPath(customTetGenPath)
+    self.ui.customTetGenPathSelector.nameFilters = [self.logic.tetGenFilename]
+   
     clipNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLClipModelsNode")
-    self.clipNodeWidget.setMRMLClipNode(clipNode)
-    displayParametersFormLayout.addRow(self.clipNodeWidget)
-
-    #
-    # Apply Button
-    #
-    self.applyButton = qt.QPushButton("Apply")
-    self.applyButton.toolTip = "Run the algorithm."
-    self.applyButton.enabled = False
-    self.layout.addWidget(self.applyButton)
-
-    self.statusLabel = qt.QPlainTextEdit()
-    self.statusLabel.setTextInteractionFlags(qt.Qt.TextSelectableByMouse)
-    self.statusLabel.setCenterOnScroll(True)
-    self.layout.addWidget(self.statusLabel)
+    self.ui.clipNodeWidget.setMRMLClipNode(clipNode)
+    
+    # These connections ensure that we update parameter node when scene is closed
+    self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
+    self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
 
     # connections
-    self.applyButton.connect('clicked(bool)', self.onApplyButton)
-    self.showTemporaryFilesFolderButton.connect('clicked(bool)', self.onShowTemporaryFilesFolder)
-    self.inputModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateMRMLFromGUI)
-    self.outputModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateMRMLFromGUI)
-    self.methodSelectorComboBox.connect("currentIndexChanged(int)", self.updateMRMLFromGUI)
+    self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
+    self.ui.showTemporaryFilesFolderButton.connect('clicked(bool)', self.onShowTemporaryFilesFolder)
+    self.ui.inputModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateMRMLFromGUI)
+    self.ui.inputSurfaceSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateMRMLFromGUI)
+    self.ui.outputModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateMRMLFromGUI)
+    self.ui.methodSelectorComboBox.connect("currentIndexChanged(int)", self.updateMRMLFromGUI)
     # Immediately update deleteTemporaryFiles in the logic to make it possible to decide to
     # keep the temporary file while the model generation is running
-    self.keepTemporaryFilesCheckBox.connect("toggled(bool)", self.onKeepTemporaryFilesToggled)
+    self.ui.keepTemporaryFilesCheckBox.connect("toggled(bool)", self.onKeepTemporaryFilesToggled)
+    self.ui.tetgenUseSurface.connect("toggled(bool)", self.updateMRMLFromGUI)
+
+    #Parameter node connections
+    self.ui.inputModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+    self.ui.inputSurfaceSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+    self.ui.outputModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+    self.ui.methodSelectorComboBox.connect("currentIndexChanged(int)", self.updateParameterNodeFromGUI)
+
+    
+    self.ui.showDetailedLogDuringExecutionCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
+    self.ui.keepTemporaryFilesCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
+
+    self.ui.cleaverFeatureScalingParameterWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.cleaverSamplingParameterWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.cleaverRateParameterWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.cleaverAdditionalParametersWidget.connect("textChanged(const QString&)", self.updateParameterNodeFromGUI)
+    self.ui.cleaverRemoveBackgroundMeshCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
+    self.ui.cleaverPaddingPercentSpinBox.connect("valueChanged(int)", self.updateParameterNodeFromGUI)
+    self.ui.customCleaverPathSelector.connect("currentPathChanged(const QString&)", self.updateParameterNodeFromGUI)
+
+    self.ui.tetgenUseSurface.connect("toggled(bool)", self.updateParameterNodeFromGUI)
+    self.ui.tetgenRatioParameterWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.tetgenAngleParameterWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.tetgenVolumeParameterWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.tetGenAdditionalParametersWidget.connect("textChanged(const QString&)", self.updateParameterNodeFromGUI)
+    self.ui.customTetGenPathSelector.connect("currentPathChanged(const QString&)", self.updateParameterNodeFromGUI)
 
     # Add vertical spacer
     self.layout.addStretch(1)
 
+    # Make sure parameter node is initialized (needed for module reload)
+    self.initializeParameterNode()
+    self.ui.parameterNodeSelector.setCurrentNode(self._parameterNode)
+    self.ui.parameterNodeSelector.connect("currentNodeChanged(vtkMRMLNode*)",  self.setParameterNode)
+
     # Refresh Apply button state
     self.updateMRMLFromGUI()
 
+  def enter(self):
+    """
+    Called each time the user opens this module.
+    """
+    # Make sure parameter node exists and observed
+    self.initializeParameterNode()
+    self.updateMRMLFromGUI()
+  
   def cleanup(self):
-    pass
+    """
+    Called when the application closes and the module widget is destroyed.
+    """
+    self.removeObservers()
 
+  def exit(self):
+    """
+    Called each time the user opens a different module.
+    """
+    # Do not react to parameter node changes (GUI wlil be updated when the user enters into the module)
+    self.removeObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self.updateGUIFromParameterNode)
+
+  def onSceneStartClose(self, caller, event):
+    """
+    Called just before the scene is closed.
+    """
+    # Parameter node will be reset, do not use it anymore
+    self.setParameterNode(None)
+
+  def onSceneEndClose(self, caller, event):
+    """
+    Called just after the scene is closed.
+    """
+    # If this module is shown while the scene is closed then recreate a new parameter node immediately
+    if self.parent.isEntered:
+      self.initializeParameterNode()
+
+   
+  def initializeParameterNode(self):
+    """
+    Ensure parameter node exists and observed.
+    """
+    # Parameter node stores all user choices in parameter values, node selections, etc.
+    # so that when the scene is saved and reloaded, these settings are restored.
+
+    self.setParameterNode(self.logic.getParameterNode())
+
+    # Select default input nodes if nothing is selected yet to save a few clicks for the user
+    if not self._parameterNode.GetNodeReference("InputSegmentation"):
+      firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLSegmentationNode")
+      if firstVolumeNode:
+        self._parameterNode.SetNodeReferenceID("InputSegmentation", firstVolumeNode.GetID())
+
+    # Select default input nodes if nothing is selected yet to save a few clicks for the user
+    if not self._parameterNode.GetNodeReference("InputSurface"):
+      firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLModelNode")
+      if firstVolumeNode:
+        self._parameterNode.SetNodeReferenceID("InputSurface", firstVolumeNode.GetID())
+
+  def setParameterNode(self, inputParameterNode):
+    """
+    Set and observe parameter node.
+    Observation is needed because when the parameter node is changed then the GUI must be updated immediately.
+    """
+
+    if inputParameterNode:
+      self.logic.setDefaultParameters(inputParameterNode)
+
+    # Unobserve previously selected parameter node and add an observer to the newly selected.
+    # Changes of parameter node are observed so that whenever parameters are changed by a script or any other module
+    # those are reflected immediately in the GUI.
+    if self._parameterNode is not None:
+      self.removeObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self.updateGUIFromParameterNode)
+    self._parameterNode = inputParameterNode
+    if self._parameterNode is not None:
+      self.addObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self.updateGUIFromParameterNode)
+
+    # Initial GUI update
+    self.updateGUIFromParameterNode()
+  
+  def updateGUIFromParameterNode(self, caller=None, event=None):
+    """
+    This method is called whenever parameter node is changed.
+    The module GUI is updated to show the current state of the parameter node.
+    """
+
+    if self._parameterNode is None or self._updatingGUIFromParameterNode:
+      return
+
+    # Make sure GUI changes do not call updateParameterNodeFromGUI (it could cause infinite loop)
+    self._updatingGUIFromParameterNode = True
+
+    # Update node selectors and sliders
+    self.ui.inputModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputSegmentation"))
+    self.ui.inputSurfaceSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputSurface"))
+    self.ui.outputModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputModel"))
+    self.ui.methodSelectorComboBox.setCurrentText(self._parameterNode.GetParameter("Method"))
+
+    self.ui.showDetailedLogDuringExecutionCheckBox.checked = (self._parameterNode.GetParameter("showDetailedLogDuringExecution") == "true")
+    self.ui.keepTemporaryFilesCheckBox.checked = (self._parameterNode.GetParameter("keepTemporaryFiles") == "true")
+
+    self.ui.cleaverFeatureScalingParameterWidget.value = float(self._parameterNode.GetParameter("cleaverFeatureScalingParameter"))
+    self.ui.cleaverSamplingParameterWidget.value = float(self._parameterNode.GetParameter("cleaverSamplingParameter"))
+    self.ui.cleaverRateParameterWidget.value = float(self._parameterNode.GetParameter("cleaverRateParameter"))
+    self.ui.cleaverAdditionalParametersWidget.text = self._parameterNode.GetParameter("cleaverAdditionalParameters")
+    self.ui.cleaverRemoveBackgroundMeshCheckBox.checked = (self._parameterNode.GetParameter("cleaverRemoveBackgroundMesh") == "true")
+    self.ui.cleaverPaddingPercentSpinBox.value = int(self._parameterNode.GetParameter("cleaverPaddingPercent"))
+    self.ui.customCleaverPathSelector.setCurrentPath(self._parameterNode.GetParameter("customCleaverPath"))
+
+    self.ui.tetgenUseSurface.checked = (self._parameterNode.GetParameter("tetgenUseSurface") == "true")
+    self.ui.tetgenRatioParameterWidget.value = float(self._parameterNode.GetParameter("tetgenRatioParameter"))
+    self.ui.tetgenAngleParameterWidget.value = float(self._parameterNode.GetParameter("tetgenAngleParameter"))
+    self.ui.tetgenVolumeParameterWidget.value = float(self._parameterNode.GetParameter("tetgenVolumeParameter"))
+    self.ui.tetGenAdditionalParametersWidget.text = self._parameterNode.GetParameter("tetGenAdditionalParameters")
+    self.ui.customTetGenPathSelector.setCurrentPath(self._parameterNode.GetParameter("customTetGenPath"))
+
+
+    # Update buttons states and tooltips
+    self.updateMRMLFromGUI()
+
+    # All the GUI updates are done
+    self._updatingGUIFromParameterNode = False
+
+  def updateParameterNodeFromGUI(self, caller=None, event=None):
+    """
+    This method is called when the user makes any change in the GUI.
+    The changes are saved into the parameter node (so that they are restored when the scene is saved and loaded).
+    """
+
+    if self._parameterNode is None or self._updatingGUIFromParameterNode:
+      return
+
+    wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
+
+    #Inputs/Outputs
+    self._parameterNode.SetNodeReferenceID("InputSegmentation", self.ui.inputModelSelector.currentNodeID)
+    self._parameterNode.SetNodeReferenceID("InputSurface", self.ui.inputSurfaceSelector.currentNodeID)
+    self._parameterNode.SetNodeReferenceID("OutputModel", self.ui.outputModelSelector.currentNodeID)
+    self._parameterNode.SetParameter("Method", self.ui.methodSelectorComboBox.currentText)
+    
+    #General parameters
+    self._parameterNode.SetParameter("showDetailedLogDuringExecution", "true" if self.ui.showDetailedLogDuringExecutionCheckBox.checked else "false")
+    self._parameterNode.SetParameter("keepTemporaryFiles", "true" if self.ui.keepTemporaryFilesCheckBox.checked else "false")
+    
+    #Cleaver parameters
+    self._parameterNode.SetParameter("cleaverFeatureScalingParameter", str(self.ui.cleaverFeatureScalingParameterWidget.value))
+    self._parameterNode.SetParameter("cleaverSamplingParameter", str(self.ui.cleaverSamplingParameterWidget.value))
+    self._parameterNode.SetParameter("cleaverRateParameter", str(self.ui.cleaverRateParameterWidget.value))
+    self._parameterNode.SetParameter("cleaverAdditionalParameters", self.ui.cleaverAdditionalParametersWidget.text)
+    self._parameterNode.SetParameter("cleaverRemoveBackgroundMesh", "true" if self.ui.cleaverRemoveBackgroundMeshCheckBox.checked else "false")
+    self._parameterNode.SetParameter("cleaverPaddingPercent", str(self.ui.cleaverPaddingPercentSpinBox.value))
+    self._parameterNode.SetParameter("customCleaverPath", self.ui.customCleaverPathSelector.currentPath)
+
+    #TetGen parameters
+    self._parameterNode.SetParameter("tetgenUseSurface", "true" if self.ui.tetgenUseSurface.checked else "false")
+    self._parameterNode.SetParameter("tetgenRatioParameter", str(self.ui.tetgenRatioParameterWidget.value))
+    self._parameterNode.SetParameter("tetgenAngleParameter", str(self.ui.tetgenAngleParameterWidget.value))
+    self._parameterNode.SetParameter("tetgenVolumeParameter", str(self.ui.tetgenVolumeParameterWidget.value))
+    self._parameterNode.SetParameter("tetGenAdditionalParameters", self.ui.tetGenAdditionalParametersWidget.text)
+    self._parameterNode.SetParameter("customTetGenPath", self.ui.customTetGenPathSelector.currentPath)
+
+    self._parameterNode.EndModify(wasModified)
+  
   def updateMRMLFromGUI(self):
-    enabled = True
-    if not self.inputModelSelector.currentNode():
-      self.applyButton.text = "Select input segmentation"
-      self.applyButton.enabled = False
-    elif not self.outputModelSelector.currentNode():
-      self.applyButton.text = "Select an output model node"
-      self.applyButton.enabled = False
-    elif self.inputModelSelector.currentNode() == self.outputModelSelector.currentNode():
-      self.applyButton.text = "Choose different Output model"
-      self.applyButton.enabled = False
+    
+    method = self.ui.methodSelectorComboBox.itemData(self.ui.methodSelectorComboBox.currentIndex)
+    
+    #Enable correct input selections
+    self.ui.inputSurfaceSelector.enabled = self.ui.tetgenUseSurface.isChecked() and method == METHOD_TETGEN
+    self.ui.segmentSelectorCombBox.enabled = not (self.ui.tetgenUseSurface.isChecked() and method == METHOD_TETGEN) and self.ui.inputModelSelector.currentNode() is not None
+    self.ui.inputModelSelector.enabled = not (self.ui.tetgenUseSurface.isChecked() and method == METHOD_TETGEN)
+
+    #populate segments 
+    inputSeg = self.ui.inputModelSelector.currentNode()
+    oldIndex = self.ui.segmentSelectorCombBox.checkedIndexes()
+    oldCount = self.ui.segmentSelectorCombBox.count
+    self.ui.segmentSelectorCombBox.clear()
+    if inputSeg is not None:
+      segmentIDs = vtk.vtkStringArray()
+      inputSeg.GetSegmentation().GetSegmentIDs(segmentIDs) 
+      for index in range(0, segmentIDs.GetNumberOfValues()):
+        self.ui.segmentSelectorCombBox.addItem(segmentIDs.GetValue(index))
+
+    #Restore index - often we will be reloading the data from the same segmentation, so re-select items number of items is the same
+    if oldCount == self.ui.segmentSelectorCombBox.count:
+      for index in oldIndex:
+        self.ui.segmentSelectorCombBox.setCheckState(index, qt.Qt.Checked)
+    
+    if method == METHOD_TETGEN:
+      self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.cleaverTab), False)
+      self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.tetgenTab), True)      
+      self.ui.advancedTabWidget.setStyleSheet("QTabBar::tab::disabled {width: 0; height: 0; margin: 0; padding: 0; border: none;} ")
+
+    if method == METHOD_CLEAVER:
+      self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.tetgenTab), False)
+      self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.cleaverTab), True)
+      self.ui.advancedTabWidget.setStyleSheet("QTabBar::tab::disabled {width: 0; height: 0; margin: 0; padding: 0; border: none;} ")
+    
+    if method == METHOD_TETGEN and self.ui.tetgenUseSurface.isChecked():
+      if not self.ui.inputSurfaceSelector.currentNode():
+        self.ui.applyButton.text = "Select input surface"
+        self.ui.applyButton.enabled = False
+      elif not self.ui.outputModelSelector.currentNode():
+        self.ui.applyButton.text = "Select an output model node"
+        self.ui.applyButton.enabled = False
+      elif self.ui.inputSurfaceSelector.currentNode() == self.ui.outputModelSelector.currentNode():
+        self.ui.applyButton.text = "Choose different Output model"
+        self.ui.applyButton.enabled = False
+      else:
+        self.ui.applyButton.text = "Apply"
+        self.ui.applyButton.enabled = True
     else:
-      self.applyButton.text = "Apply"
-      self.applyButton.enabled = True
+      if not self.ui.inputModelSelector.currentNode():
+        self.ui.applyButton.text = "Select input segmentation"
+        self.ui.applyButton.enabled = False
+      elif not self.ui.outputModelSelector.currentNode():
+        self.ui.applyButton.text = "Select an output model node"
+        self.ui.applyButton.enabled = False
+      elif self.ui.inputModelSelector.currentNode() == self.ui.outputModelSelector.currentNode():
+        self.ui.applyButton.text = "Choose different Output model"
+        self.ui.applyButton.enabled = False
+      else:
+        self.ui.applyButton.text = "Apply"
+        self.ui.applyButton.enabled = True
+    
+    self.updateParameterNodeFromGUI()
+
 
   # def updateGUIFromMRML(self):
     # parameterNode = self.parameterNodeSelector.currentNode()
@@ -274,31 +384,48 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     if self.modelGenerationInProgress:
       self.modelGenerationInProgress = False
       self.logic.abortRequested = True
-      self.applyButton.text = "Cancelling..."
-      self.applyButton.enabled = False
+      self.ui.applyButton.text = "Cancelling..."
+      self.ui.applyButton.enabled = False
       return
 
     self.modelGenerationInProgress = True
-    self.applyButton.text = "Cancel"
-    self.statusLabel.plainText = ''
+    self.ui.applyButton.text = "Cancel"
+    self.ui.statusLabel.plainText = ''
     slicer.app.setOverrideCursor(qt.Qt.WaitCursor)
     try:
-      self.logic.setCustomCleaverPath(self.customCleaverPathSelector.currentPath)
-      self.logic.setCustomTetGenPath(self.customTetGenPathSelector.currentPath)
+      self.logic.setCustomCleaverPath(self.ui.customCleaverPathSelector.currentPath)
+      self.logic.setCustomTetGenPath(self.ui.customTetGenPathSelector.currentPath)
 
-      self.logic.deleteTemporaryFiles = not self.keepTemporaryFilesCheckBox.checked
-      self.logic.logStandardOutput = self.showDetailedLogDuringExecutionCheckBox.checked
+      self.logic.deleteTemporaryFiles = not self.ui.keepTemporaryFilesCheckBox.checked
+      self.logic.logStandardOutput = self.ui.showDetailedLogDuringExecutionCheckBox.checked
 
-      method = self.methodSelectorComboBox.itemData(self.methodSelectorComboBox.currentIndex)
+      method = self.ui.methodSelectorComboBox.itemData(self.ui.methodSelectorComboBox.currentIndex)
+
+      #Get list of segments to mesh
+      segmentIndexes = self.ui.segmentSelectorCombBox.checkedIndexes()
+      segments = []
+
+      for index in segmentIndexes:
+        segments.append(self.ui.segmentSelectorCombBox.itemText(index.row()))
+
       print(method)
       if method == METHOD_CLEAVER:
-        self.logic.createMeshFromSegmentationCleaver(self.inputModelSelector.currentNode(),
-          self.outputModelSelector.currentNode(), self.cleaverAdditionalParametersWidget.text,
-          self.cleaverRemoveBackgroundMeshCheckBox.isChecked(),
-          self.cleaverPaddingPercentSpinBox.value * 0.01)
+        self.logic.createMeshFromSegmentationCleaver(self.ui.inputModelSelector.currentNode(),
+          self.ui.outputModelSelector.currentNode(), segments, self.ui.cleaverAdditionalParametersWidget.text,
+          self.ui.cleaverRemoveBackgroundMeshCheckBox.isChecked(),
+          self.ui.cleaverPaddingPercentSpinBox.value * 0.01, self.ui.cleaverFeatureScalingParameterWidget.value, self.ui.cleaverSamplingParameterWidget.value, self.ui.cleaverRateParameterWidget.value)
       else:
-        self.logic.createMeshFromSegmentationTetGen(self.inputModelSelector.currentNode(),
-          self.outputModelSelector.currentNode(), self.tetGenAdditionalParametersWidget.text)
+        if self.ui.tetgenUseSurface.isChecked():
+          if self.ui.inputSurfaceSelector.currentNode().GetUnstructuredGrid() is not None:
+            self.addLog("Error: Mesh must be a surface, not volumetric")
+            return
+          self.logic.createMeshFromPolyDataTetGen(self.ui.inputSurfaceSelector.currentNode().GetPolyData(), 
+            self.ui.outputModelSelector.currentNode(), self.ui.tetGenAdditionalParametersWidget.text,
+            self.ui.tetgenRatioParameterWidget.value, self.ui.tetgenAngleParameterWidget.value, self.ui.tetgenVolumeParameterWidget.value)
+        else:
+          self.logic.createMeshFromSegmentationTetGen(self.ui.inputModelSelector.currentNode(),
+            self.ui.outputModelSelector.currentNode(), segments, self.ui.tetGenAdditionalParametersWidget.text,
+            self.ui.tetgenRatioParameterWidget.value, self.ui.tetgenAngleParameterWidget.value, self.ui.tetgenVolumeParameterWidget.value)
 
     except Exception as e:
       print(e)
@@ -313,7 +440,7 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
   def addLog(self, text):
     """Append text to log window
     """
-    self.statusLabel.appendPlainText(text)
+    self.ui.statusLabel.appendPlainText(text)
     slicer.app.processEvents()  # force update
 
 #
@@ -359,6 +486,33 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
       os.path.join(self.scriptPath, '../../../../bin/RelWithDebInfo'),
       os.path.join(self.scriptPath, '../../../../bin/MinSizeRel') ]
 
+  def setDefaultParameters(self, parameterNode):
+    """
+    Initialize parameter node with default settings.
+    """
+    self.setParameterIfNotDefined(parameterNode, "showDetailedLogDuringExecution", "false")
+    self.setParameterIfNotDefined(parameterNode, "keepTemporaryFiles", "false")
+
+    self.setParameterIfNotDefined(parameterNode, "cleaverFeatureScalingParameter", "2.0")
+    self.setParameterIfNotDefined(parameterNode, "cleaverSamplingParameter", "0.2")
+    self.setParameterIfNotDefined(parameterNode, "cleaverRateParameter", "0.2")
+    self.setParameterIfNotDefined(parameterNode, "cleaverAdditionalParameters", "")
+    self.setParameterIfNotDefined(parameterNode, "cleaverRemoveBackgroundMesh", "true")
+    self.setParameterIfNotDefined(parameterNode, "cleaverPaddingPercent", "10")
+    self.setParameterIfNotDefined(parameterNode, "customCleaverPath", "")
+
+    self.setParameterIfNotDefined(parameterNode, "tetgenUseSurface", "false")
+    self.setParameterIfNotDefined(parameterNode, "tetgenRatioParameter", "5")
+    self.setParameterIfNotDefined(parameterNode, "tetgenAngleParameter", "5")
+    self.setParameterIfNotDefined(parameterNode, "tetgenVolumeParameter", "5")
+    self.setParameterIfNotDefined(parameterNode, "tetGenAdditionalParameters", "")
+    self.setParameterIfNotDefined(parameterNode, "customTetGenPath", "")
+    
+  
+  def setParameterIfNotDefined(self, parameterNode, key, value):
+    if not parameterNode.GetParameter(key):
+      parameterNode.SetParameter(key, value)
+  
   def addLog(self, text):
     logging.info(text)
     if self.logCallback:
@@ -489,10 +643,12 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     qt.QDir().mkpath(dirPath)
     return dirPath
 
-  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, additionalParameters = None, removeBackgroundMesh = False, paddingRatio = 0.10):
+  def createMeshFromSegmentationCleaver(self, inputSegmentation, outputMeshNode, segments = [], additionalParameters = None, removeBackgroundMesh = False, 
+    paddingRatio = 0.10, featureScale = 2, samplingRate=0.2, rateOfChange=0.2):
 
     if additionalParameters is None:
-      additionalParameters="--feature_scaling 2 --sampling_rate 0.2"
+      additionalParameters=""
+
 
     self.abortRequested = False
     tempDir = self.createTempDirectory()
@@ -532,7 +688,16 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
     # Get merged labelmap
     segmentIdList = vtk.vtkStringArray()
+    
+    for segment in segments:
+      segmentIdList.InsertNextValue(segment)
+
+    if segmentIdList.GetNumberOfValues() == 0:
+      logging.info("createMeshFromSegmentationCleaver skipped: there are no selected segments")
+      return
+      
     slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(inputSegmentation, segmentIdList, labelmapVolumeNode, labelmapVolumeNode)
+    
 
     inputLabelmapVolumeFilePath = os.path.join(tempDir, "inputLabelmap.nrrd")
     slicer.util.saveNode(labelmapVolumeNode, inputLabelmapVolumeFilePath, {"useCompression": False})
@@ -553,6 +718,11 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     slicer.mrmlScene.RemoveNode(labelmapVolumeNode)
     slicer.mrmlScene.RemoveNode(colorTableNode)
 
+    #User set parameters
+    inputParamsCleaver.extend(["--feature_scaling", "{:.2f}".format(featureScale)])
+    inputParamsCleaver.extend(["--sampling_rate", "{:.2f}".format(samplingRate)])
+    inputParamsCleaver.extend(["--lipschitz", "{:.2f}".format(rateOfChange)])
+    
     # Set up output format
 
     inputParamsCleaver.extend(["--output_path", tempDir+"/"])
@@ -642,17 +812,19 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
     self.addLog("Model generation is completed")
 
-  def createMeshFromSegmentationTetGen(self, inputSegmentation, outputMeshNode, additionalParameters=""):
+  def createMeshFromSegmentationTetGen(self, inputSegmentation, outputMeshNode, segments = [], additionalParameters="", ratio=5, angle=0, volume=10):
+    
+    segmentIdList = vtk.vtkStringArray()    
+    for segment in segments:
+      segmentIdList.InsertNextValue(segment)
 
-    visibleSegmentIds = vtk.vtkStringArray()
-    inputSegmentation.GetDisplayNode().GetVisibleSegmentIDs(visibleSegmentIds)
-    if visibleSegmentIds.GetNumberOfValues() == 0:
-      logging.info("createMeshFromSegmentationTetGen skipped: there are no visible segments")
+    if segmentIdList.GetNumberOfValues() == 0:
+      logging.info("createMeshFromSegmentationTetGen skipped: there are no selected segments")
       return
     inputSegmentation.CreateClosedSurfaceRepresentation()
     appender = vtk.vtkAppendPolyData()
-    for i in range(visibleSegmentIds.GetNumberOfValues()):
-      segmentId = visibleSegmentIds.GetValue(i)
+    for i in range(segmentIdList.GetNumberOfValues()):
+      segmentId = segmentIdList.GetValue(i)
 
       #Use old function arguments for 4.10 
       if slicer.app.majorVersion == 4 and slicer.app.minorVersion < 11:
@@ -663,9 +835,12 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
       appender.AddInputData(polydata)
 
     appender.Update()
-    self.createMeshFromPolyDataTetGen(appender.GetOutput(), outputMeshNode, additionalParameters)
+    self.createMeshFromPolyDataTetGen(appender.GetOutput(), outputMeshNode, additionalParameters, ratio, angle, volume)
 
-  def createMeshFromPolyDataTetGen(self, inputPolyData, outputMeshNode, additionalParameters=""):
+    #Clean up representation
+    inputSegmentation.GetSegmentation().RemoveRepresentation(slicer.vtkSegmentationConverter().GetClosedSurfaceRepresentationName())
+
+  def createMeshFromPolyDataTetGen(self, inputPolyData, outputMeshNode, additionalParameters="", ratio=5, angle=0, volume=10):
 
     self.abortRequested = False
     tempDir = self.createTempDirectory()
@@ -681,8 +856,11 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     inputWriter.SetFileTypeToASCII()
     inputWriter.Write()
 
+    #Command line for quality parameters
+    parameters = 'q'+"{:.2f}".format(ratio)+'/'+"{:.2f}".format(angle)+'a'+"{:.2f}".format(volume)
+
     inputParamsTetGen = []
-    inputParamsTetGen.append("-k"+additionalParameters)
+    inputParamsTetGen.append("-k"+parameters+additionalParameters)
     inputParamsTetGen.append(inputSurfaceMeshFilePath)
 
     # Run tetgen
@@ -761,7 +939,7 @@ class SegmentMesherTest(ScriptedLoadableModuleTest):
     outputModelNode.CreateDefaultDisplayNodes()
 
     logic = SegmentMesherLogic()
-    logic.createMeshFromPolyDataTetGen(inputModelNode.GetPolyData(), outputModelNode)
+    logic.createMeshFromPolyDataTetGen(inputModelNode.GetPolyData(), outputModelNode, '', 100, 0, 100)
 
     self.assertTrue(outputModelNode.GetMesh().GetNumberOfPoints()>0)
     self.assertTrue(outputModelNode.GetMesh().GetNumberOfCells()>0)
