@@ -3,6 +3,7 @@ import os
 import unittest
 import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
+from slicer.util import VTKObservationMixin
 import logging
 
 #
@@ -38,10 +39,20 @@ This module was originally developed by Andras Lasso (Queen's University, PerkLa
 # SegmentMesherWidget
 #
 
-class SegmentMesherWidget(ScriptedLoadableModuleWidget):
+class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
   """Uses ScriptedLoadableModuleWidget base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
+
+  def __init__(self, parent=None):
+    """
+    Called when the user opens the module the first time and the widget is initialized.
+    """
+    ScriptedLoadableModuleWidget.__init__(self, parent)
+    VTKObservationMixin.__init__(self)  # needed for parameter node observation
+    self.logic = None
+    self._parameterNode = None
+    self._updatingGUIFromParameterNode = False
 
   def setup(self):
     ScriptedLoadableModuleWidget.setup(self)
@@ -76,6 +87,9 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     clipNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLClipModelsNode")
     self.ui.clipNodeWidget.setMRMLClipNode(clipNode)
     
+    # These connections ensure that we update parameter node when scene is closed
+    self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
+    self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
 
     # connections
     self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
@@ -89,19 +103,204 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
     self.ui.keepTemporaryFilesCheckBox.connect("toggled(bool)", self.onKeepTemporaryFilesToggled)
     self.ui.tetgenUseSurface.connect("toggled(bool)", self.updateMRMLFromGUI)
 
+    #Parameter node connections
+    self.ui.inputModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+    self.ui.inputSurfaceSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+    self.ui.outputModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
+    self.ui.methodSelectorComboBox.connect("currentIndexChanged(int)", self.updateParameterNodeFromGUI)
+
+    
+    self.ui.showDetailedLogDuringExecutionCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
+    self.ui.keepTemporaryFilesCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
+
+    self.ui.cleaverFeatureScalingParameterWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.cleaverSamplingParameterWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.cleaverRateParameterWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.cleaverAdditionalParametersWidget.connect("textChanged(const QString&)", self.updateParameterNodeFromGUI)
+    self.ui.cleaverRemoveBackgroundMeshCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
+    self.ui.cleaverPaddingPercentSpinBox.connect("valueChanged(int)", self.updateParameterNodeFromGUI)
+    self.ui.customCleaverPathSelector.connect("currentPathChanged(const QString&)", self.updateParameterNodeFromGUI)
+
+    self.ui.tetgenUseSurface.connect("toggled(bool)", self.updateParameterNodeFromGUI)
+    self.ui.tetgenRatioParameterWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.tetgenAngleParameterWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.tetgenVolumeParameterWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
+    self.ui.tetGenAdditionalParametersWidget.connect("textChanged(const QString&)", self.updateParameterNodeFromGUI)
+    self.ui.customTetGenPathSelector.connect("currentPathChanged(const QString&)", self.updateParameterNodeFromGUI)
+
     # Add vertical spacer
     self.layout.addStretch(1)
+
+    # Make sure parameter node is initialized (needed for module reload)
+    self.initializeParameterNode()
+    self.ui.parameterNodeSelector.setCurrentNode(self._parameterNode)
+    self.ui.parameterNodeSelector.connect("currentNodeChanged(vtkMRMLNode*)",  self.setParameterNode)
 
     # Refresh Apply button state
     self.updateMRMLFromGUI()
 
   def enter(self):
+    """
+    Called each time the user opens this module.
+    """
+    # Make sure parameter node exists and observed
+    self.initializeParameterNode()
     self.updateMRMLFromGUI()
   
   def cleanup(self):
-    pass
+    """
+    Called when the application closes and the module widget is destroyed.
+    """
+    self.removeObservers()
+
+  def exit(self):
+    """
+    Called each time the user opens a different module.
+    """
+    # Do not react to parameter node changes (GUI wlil be updated when the user enters into the module)
+    self.removeObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self.updateGUIFromParameterNode)
+
+  def onSceneStartClose(self, caller, event):
+    """
+    Called just before the scene is closed.
+    """
+    # Parameter node will be reset, do not use it anymore
+    self.setParameterNode(None)
+
+  def onSceneEndClose(self, caller, event):
+    """
+    Called just after the scene is closed.
+    """
+    # If this module is shown while the scene is closed then recreate a new parameter node immediately
+    if self.parent.isEntered:
+      self.initializeParameterNode()
 
    
+  def initializeParameterNode(self):
+    """
+    Ensure parameter node exists and observed.
+    """
+    # Parameter node stores all user choices in parameter values, node selections, etc.
+    # so that when the scene is saved and reloaded, these settings are restored.
+
+    self.setParameterNode(self.logic.getParameterNode())
+
+    # Select default input nodes if nothing is selected yet to save a few clicks for the user
+    if not self._parameterNode.GetNodeReference("InputSegmentation"):
+      firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLSegmentationNode")
+      if firstVolumeNode:
+        self._parameterNode.SetNodeReferenceID("InputSegmentation", firstVolumeNode.GetID())
+
+    # Select default input nodes if nothing is selected yet to save a few clicks for the user
+    if not self._parameterNode.GetNodeReference("InputSurface"):
+      firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLModelNode")
+      if firstVolumeNode:
+        self._parameterNode.SetNodeReferenceID("InputSurface", firstVolumeNode.GetID())
+
+  def setParameterNode(self, inputParameterNode):
+    """
+    Set and observe parameter node.
+    Observation is needed because when the parameter node is changed then the GUI must be updated immediately.
+    """
+
+    if inputParameterNode:
+      self.logic.setDefaultParameters(inputParameterNode)
+
+    # Unobserve previously selected parameter node and add an observer to the newly selected.
+    # Changes of parameter node are observed so that whenever parameters are changed by a script or any other module
+    # those are reflected immediately in the GUI.
+    if self._parameterNode is not None:
+      self.removeObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self.updateGUIFromParameterNode)
+    self._parameterNode = inputParameterNode
+    if self._parameterNode is not None:
+      self.addObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self.updateGUIFromParameterNode)
+
+    # Initial GUI update
+    self.updateGUIFromParameterNode()
+  
+  def updateGUIFromParameterNode(self, caller=None, event=None):
+    """
+    This method is called whenever parameter node is changed.
+    The module GUI is updated to show the current state of the parameter node.
+    """
+
+    if self._parameterNode is None or self._updatingGUIFromParameterNode:
+      return
+
+    # Make sure GUI changes do not call updateParameterNodeFromGUI (it could cause infinite loop)
+    self._updatingGUIFromParameterNode = True
+
+    # Update node selectors and sliders
+    self.ui.inputModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputSegmentation"))
+    self.ui.inputSurfaceSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputSurface"))
+    self.ui.outputModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputModel"))
+    self.ui.methodSelectorComboBox.setCurrentText(self._parameterNode.GetParameter("Method"))
+
+    self.ui.showDetailedLogDuringExecutionCheckBox.checked = (self._parameterNode.GetParameter("showDetailedLogDuringExecution") == "true")
+    self.ui.keepTemporaryFilesCheckBox.checked = (self._parameterNode.GetParameter("keepTemporaryFiles") == "true")
+
+    self.ui.cleaverFeatureScalingParameterWidget.value = float(self._parameterNode.GetParameter("cleaverFeatureScalingParameter"))
+    self.ui.cleaverSamplingParameterWidget.value = float(self._parameterNode.GetParameter("cleaverSamplingParameter"))
+    self.ui.cleaverRateParameterWidget.value = float(self._parameterNode.GetParameter("cleaverRateParameter"))
+    self.ui.cleaverAdditionalParametersWidget.text = self._parameterNode.GetParameter("cleaverAdditionalParameters")
+    self.ui.cleaverRemoveBackgroundMeshCheckBox.checked = (self._parameterNode.GetParameter("cleaverRemoveBackgroundMesh") == "true")
+    self.ui.cleaverPaddingPercentSpinBox.value = int(self._parameterNode.GetParameter("cleaverPaddingPercent"))
+    self.ui.customCleaverPathSelector.setCurrentPath(self._parameterNode.GetParameter("customCleaverPath"))
+
+    self.ui.tetgenUseSurface.checked = (self._parameterNode.GetParameter("tetgenUseSurface") == "true")
+    self.ui.tetgenRatioParameterWidget.value = float(self._parameterNode.GetParameter("tetgenRatioParameter"))
+    self.ui.tetgenAngleParameterWidget.value = float(self._parameterNode.GetParameter("tetgenAngleParameter"))
+    self.ui.tetgenVolumeParameterWidget.value = float(self._parameterNode.GetParameter("tetgenVolumeParameter"))
+    self.ui.tetGenAdditionalParametersWidget.text = self._parameterNode.GetParameter("tetGenAdditionalParameters")
+    self.ui.customTetGenPathSelector.setCurrentPath(self._parameterNode.GetParameter("customTetGenPath"))
+
+
+    # Update buttons states and tooltips
+    self.updateMRMLFromGUI()
+
+    # All the GUI updates are done
+    self._updatingGUIFromParameterNode = False
+
+  def updateParameterNodeFromGUI(self, caller=None, event=None):
+    """
+    This method is called when the user makes any change in the GUI.
+    The changes are saved into the parameter node (so that they are restored when the scene is saved and loaded).
+    """
+
+    if self._parameterNode is None or self._updatingGUIFromParameterNode:
+      return
+
+    wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
+
+    #Inputs/Outputs
+    self._parameterNode.SetNodeReferenceID("InputSegmentation", self.ui.inputModelSelector.currentNodeID)
+    self._parameterNode.SetNodeReferenceID("InputSurface", self.ui.inputSurfaceSelector.currentNodeID)
+    self._parameterNode.SetNodeReferenceID("OutputModel", self.ui.outputModelSelector.currentNodeID)
+    self._parameterNode.SetParameter("Method", self.ui.methodSelectorComboBox.currentText)
+    
+    #General parameters
+    self._parameterNode.SetParameter("showDetailedLogDuringExecution", "true" if self.ui.showDetailedLogDuringExecutionCheckBox.checked else "false")
+    self._parameterNode.SetParameter("keepTemporaryFiles", "true" if self.ui.keepTemporaryFilesCheckBox.checked else "false")
+    
+    #Cleaver parameters
+    self._parameterNode.SetParameter("cleaverFeatureScalingParameter", str(self.ui.cleaverFeatureScalingParameterWidget.value))
+    self._parameterNode.SetParameter("cleaverSamplingParameter", str(self.ui.cleaverSamplingParameterWidget.value))
+    self._parameterNode.SetParameter("cleaverRateParameter", str(self.ui.cleaverRateParameterWidget.value))
+    self._parameterNode.SetParameter("cleaverAdditionalParameters", self.ui.cleaverAdditionalParametersWidget.text)
+    self._parameterNode.SetParameter("cleaverRemoveBackgroundMesh", "true" if self.ui.cleaverRemoveBackgroundMeshCheckBox.checked else "false")
+    self._parameterNode.SetParameter("cleaverPaddingPercent", str(self.ui.cleaverPaddingPercentSpinBox.value))
+    self._parameterNode.SetParameter("customCleaverPath", self.ui.customCleaverPathSelector.currentPath)
+
+    #TetGen parameters
+    self._parameterNode.SetParameter("tetgenUseSurface", "true" if self.ui.tetgenUseSurface.checked else "false")
+    self._parameterNode.SetParameter("tetgenRatioParameter", str(self.ui.tetgenRatioParameterWidget.value))
+    self._parameterNode.SetParameter("tetgenAngleParameter", str(self.ui.tetgenAngleParameterWidget.value))
+    self._parameterNode.SetParameter("tetgenVolumeParameter", str(self.ui.tetgenVolumeParameterWidget.value))
+    self._parameterNode.SetParameter("tetGenAdditionalParameters", self.ui.tetGenAdditionalParametersWidget.text)
+    self._parameterNode.SetParameter("customTetGenPath", self.ui.customTetGenPathSelector.currentPath)
+
+    self._parameterNode.EndModify(wasModified)
+  
   def updateMRMLFromGUI(self):
     
     method = self.ui.methodSelectorComboBox.itemData(self.ui.methodSelectorComboBox.currentIndex)
@@ -128,13 +327,11 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
         self.ui.segmentSelectorCombBox.setCheckState(index, qt.Qt.Checked)
     
     if method == METHOD_TETGEN:
-      self.ui.advancedTabWidget.setCurrentWidget(self.ui.tetgenTab)
       self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.cleaverTab), False)
       self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.tetgenTab), True)      
       self.ui.advancedTabWidget.setStyleSheet("QTabBar::tab::disabled {width: 0; height: 0; margin: 0; padding: 0; border: none;} ")
 
     if method == METHOD_CLEAVER:
-      self.ui.advancedTabWidget.setCurrentWidget(self.ui.cleaverTab)
       self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.tetgenTab), False)
       self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.cleaverTab), True)
       self.ui.advancedTabWidget.setStyleSheet("QTabBar::tab::disabled {width: 0; height: 0; margin: 0; padding: 0; border: none;} ")
@@ -165,6 +362,9 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget):
       else:
         self.ui.applyButton.text = "Apply"
         self.ui.applyButton.enabled = True
+    
+    self.updateParameterNodeFromGUI()
+
 
   # def updateGUIFromMRML(self):
     # parameterNode = self.parameterNodeSelector.currentNode()
@@ -286,6 +486,33 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
       os.path.join(self.scriptPath, '../../../../bin/RelWithDebInfo'),
       os.path.join(self.scriptPath, '../../../../bin/MinSizeRel') ]
 
+  def setDefaultParameters(self, parameterNode):
+    """
+    Initialize parameter node with default settings.
+    """
+    self.setParameterIfNotDefined(parameterNode, "showDetailedLogDuringExecution", "false")
+    self.setParameterIfNotDefined(parameterNode, "keepTemporaryFiles", "false")
+
+    self.setParameterIfNotDefined(parameterNode, "cleaverFeatureScalingParameter", "2.0")
+    self.setParameterIfNotDefined(parameterNode, "cleaverSamplingParameter", "0.2")
+    self.setParameterIfNotDefined(parameterNode, "cleaverRateParameter", "0.2")
+    self.setParameterIfNotDefined(parameterNode, "cleaverAdditionalParameters", "")
+    self.setParameterIfNotDefined(parameterNode, "cleaverRemoveBackgroundMesh", "true")
+    self.setParameterIfNotDefined(parameterNode, "cleaverPaddingPercent", "10")
+    self.setParameterIfNotDefined(parameterNode, "customCleaverPath", "")
+
+    self.setParameterIfNotDefined(parameterNode, "tetgenUseSurface", "false")
+    self.setParameterIfNotDefined(parameterNode, "tetgenRatioParameter", "5")
+    self.setParameterIfNotDefined(parameterNode, "tetgenAngleParameter", "5")
+    self.setParameterIfNotDefined(parameterNode, "tetgenVolumeParameter", "5")
+    self.setParameterIfNotDefined(parameterNode, "tetGenAdditionalParameters", "")
+    self.setParameterIfNotDefined(parameterNode, "customTetGenPath", "")
+    
+  
+  def setParameterIfNotDefined(self, parameterNode, key, value):
+    if not parameterNode.GetParameter(key):
+      parameterNode.SetParameter(key, value)
+  
   def addLog(self, text):
     logging.info(text)
     if self.logCallback:
