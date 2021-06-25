@@ -705,8 +705,10 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
 
     # Keep IJK to RAS matrix, we'll need it later
     unscaledIjkToRasMatrix = vtk.vtkMatrix4x4()
-    labelmapVolumeNode.GetIJKToRASDirectionMatrix(unscaledIjkToRasMatrix)
-    origin = labelmapVolumeNode.GetOrigin()
+    labelmapVolumeNode.GetIJKToRASDirectionMatrix(unscaledIjkToRasMatrix)  # axis directions, without scaling by spacing
+    ijkToRasMatrix = vtk.vtkMatrix4x4()
+    labelmapVolumeNode.GetIJKToRASMatrix(ijkToRasMatrix)
+    origin = ijkToRasMatrix.MultiplyPoint([-0.5, -0.5, -0.5, 1.0])  # Cleaver uses the voxel corner as its origin, therefore we need a half-voxel offset
     for i in range(3):
       unscaledIjkToRasMatrix.SetElement(i,3, origin[i])
 
