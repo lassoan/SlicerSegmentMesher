@@ -1,7 +1,7 @@
 set(proj cleaver)
 
 # Set dependency list
-set(${proj}_DEPENDS "")
+set(${proj}_DEPENDS ITK)
 
 # Include dependent projects if any
 ExternalProject_Include_Dependencies(${proj} PROJECT_VAR proj)
