@@ -1,7 +1,9 @@
 set(proj cleaver)
 
 # Set dependency list
-set(${proj}_DEPENDS "")
+# ITK dependency needed for the case when the module is 
+# bundled with Slicer in a custom application
+set(${proj}_DEPENDS ITK)
 
 # Include dependent projects if any
 ExternalProject_Include_Dependencies(${proj} PROJECT_VAR proj)
