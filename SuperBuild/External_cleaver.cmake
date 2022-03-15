@@ -22,10 +22,6 @@ endif()
 
 if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
 
-  if(NOT DEFINED git_protocol)
-    set(git_protocol "git")
-  endif()
-
   set(${proj}_INSTALL_DIR ${CMAKE_BINARY_DIR}/${proj}-install)
   set(${proj}_DIR ${CMAKE_BINARY_DIR}/${proj}-build)
 
@@ -36,7 +32,7 @@ if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
     SOURCE_SUBDIR src # requires CMake 3.7 or later
     BINARY_DIR ${proj}-build
     INSTALL_DIR ${${proj}_INSTALL_DIR}
-    GIT_REPOSITORY "${git_protocol}://github.com/SCIInstitute/Cleaver2.git"
+    GIT_REPOSITORY "${EP_GIT_PROTOCOL}://github.com/SCIInstitute/Cleaver2.git"
     GIT_TAG "4b37dab103ebfc86d26e282b33cbca724ef5fde5"
     #--Patch step-------------  
     #PATCH_COMMAND ${CMAKE_COMMAND} -Delastix_SRC_DIR=${CMAKE_BINARY_DIR}/${proj}
