@@ -17,10 +17,6 @@ endif()
 
 if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
 
-  if(NOT DEFINED git_protocol)
-    set(git_protocol "git")
-  endif()
-
   set(${proj}_INSTALL_DIR ${CMAKE_BINARY_DIR}/${proj}-install)
   set(${proj}_DIR ${CMAKE_BINARY_DIR}/${proj}-build)
 
@@ -31,7 +27,7 @@ if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
     #SOURCE_SUBDIR src # requires CMake 3.7 or later
     BINARY_DIR ${proj}-build
     INSTALL_DIR ${${proj}_INSTALL_DIR}
-    GIT_REPOSITORY "${git_protocol}://github.com/lassoan/tetgen.git"
+    GIT_REPOSITORY "${EP_GIT_PROTOCOL}://github.com/lassoan/tetgen.git"
     #GIT_TAG "ef057ff89233822b26b04b31c3c043af57d5deff"
     #--Patch step-------------
     #PATCH_COMMAND ${CMAKE_COMMAND} -Delastix_SRC_DIR=${CMAKE_BINARY_DIR}/${proj}
