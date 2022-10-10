@@ -33,7 +33,7 @@ if(NOT DEFINED ${proj}_DIR AND NOT ${CMAKE_PROJECT_NAME}_USE_SYSTEM_${proj})
     BINARY_DIR ${proj}-build
     INSTALL_DIR ${${proj}_INSTALL_DIR}
     GIT_REPOSITORY "${EP_GIT_PROTOCOL}://github.com/SCIInstitute/Cleaver2.git"
-    GIT_TAG "4b37dab103ebfc86d26e282b33cbca724ef5fde5"
+    GIT_TAG "e4fa5b091b450d736c479cad4f0349fc08b8fb16"
     #--Patch step-------------  
     #PATCH_COMMAND ${CMAKE_COMMAND} -Delastix_SRC_DIR=${CMAKE_BINARY_DIR}/${proj}
     #  -P ${CMAKE_CURRENT_LIST_DIR}/${proj}_patch.cmake
