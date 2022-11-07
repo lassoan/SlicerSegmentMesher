@@ -735,7 +735,8 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
     inputParamsCleaver.append("--verbose")
 
     # Quality
-    inputParamsCleaver.extend(additionalParameters.split(' '))
+    if additionalParameters:
+      inputParamsCleaver.extend(additionalParameters.split(' '))
 
     # Run Cleaver
     ep = self.startMesher(inputParamsCleaver, self.getCleaverPath())
