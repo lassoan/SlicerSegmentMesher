@@ -69,8 +69,8 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     # Finish UI setup ...
     self.ui.parameterNodeSelector.addAttribute( "vtkMRMLScriptedModuleNode", "ModuleName", "SegmentMesher" )
     self.ui.parameterNodeSelector.setMRMLScene( slicer.mrmlScene )
+    self.ui.inputSegmentationSelector.setMRMLScene( slicer.mrmlScene )
     self.ui.inputModelSelector.setMRMLScene( slicer.mrmlScene )
-    self.ui.inputSurfaceSelector.setMRMLScene( slicer.mrmlScene )
     self.ui.outputModelSelector.setMRMLScene( slicer.mrmlScene )
 
     self.ui.methodSelectorComboBox.addItem("Cleaver", METHOD_CLEAVER)
@@ -94,8 +94,8 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     # connections
     self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
     self.ui.showTemporaryFilesFolderButton.connect('clicked(bool)', self.onShowTemporaryFilesFolder)
+    self.ui.inputSegmentationSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateMRMLFromGUI)
     self.ui.inputModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateMRMLFromGUI)
-    self.ui.inputSurfaceSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateMRMLFromGUI)
     self.ui.outputModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateMRMLFromGUI)
     self.ui.methodSelectorComboBox.connect("currentIndexChanged(int)", self.updateMRMLFromGUI)
     # Immediately update deleteTemporaryFiles in the logic to make it possible to decide to
@@ -104,8 +104,8 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     self.ui.tetgenUseSurface.connect("toggled(bool)", self.updateMRMLFromGUI)
 
     #Parameter node connections
+    self.ui.inputSegmentationSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
     self.ui.inputModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
-    self.ui.inputSurfaceSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
     self.ui.outputModelSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
     self.ui.methodSelectorComboBox.connect("currentIndexChanged(int)", self.updateParameterNodeFromGUI)
 
@@ -231,8 +231,8 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     self._updatingGUIFromParameterNode = True
 
     # Update node selectors and sliders
-    self.ui.inputModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputSegmentation"))
-    self.ui.inputSurfaceSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputSurface"))
+    self.ui.inputSegmentationSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputSegmentation"))
+    self.ui.inputModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputSurface"))
     self.ui.outputModelSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputModel"))
     self.ui.methodSelectorComboBox.setCurrentText(self._parameterNode.GetParameter("Method"))
 
@@ -273,8 +273,8 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
 
     #Inputs/Outputs
-    self._parameterNode.SetNodeReferenceID("InputSegmentation", self.ui.inputModelSelector.currentNodeID)
-    self._parameterNode.SetNodeReferenceID("InputSurface", self.ui.inputSurfaceSelector.currentNodeID)
+    self._parameterNode.SetNodeReferenceID("InputSegmentation", self.ui.inputSegmentationSelector.currentNodeID)
+    self._parameterNode.SetNodeReferenceID("InputSurface", self.ui.inputModelSelector.currentNodeID)
     self._parameterNode.SetNodeReferenceID("OutputModel", self.ui.outputModelSelector.currentNodeID)
     self._parameterNode.SetParameter("Method", self.ui.methodSelectorComboBox.currentText)
 
@@ -306,12 +306,17 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     method = self.ui.methodSelectorComboBox.itemData(self.ui.methodSelectorComboBox.currentIndex)
 
     #Enable correct input selections
-    self.ui.inputSurfaceSelector.enabled = self.ui.tetgenUseSurface.isChecked() and method == METHOD_TETGEN
-    self.ui.segmentSelectorCombBox.enabled = not (self.ui.tetgenUseSurface.isChecked() and method == METHOD_TETGEN) and self.ui.inputModelSelector.currentNode() is not None
-    self.ui.inputModelSelector.enabled = not (self.ui.tetgenUseSurface.isChecked() and method == METHOD_TETGEN)
+    inputIsModel = (self.ui.tetgenUseSurface.isChecked() and method == METHOD_TETGEN)
+    self.ui.inputSegmentationLabel.visible = not inputIsModel
+    self.ui.inputSegmentationSelector.visible = not inputIsModel
+    self.ui.segmentSelectorLabel.visible = not inputIsModel
+    self.ui.segmentSelectorCombBox.visible = not inputIsModel
+    self.ui.inputModelLabel.visible = inputIsModel
+    self.ui.inputModelSelector.visible = inputIsModel
+    self.ui.segmentSelectorCombBox.enabled = self.ui.inputSegmentationSelector.currentNode() is not None
 
     #populate segments
-    inputSeg = self.ui.inputModelSelector.currentNode()
+    inputSeg = self.ui.inputSegmentationSelector.currentNode()
     oldIndex = self.ui.segmentSelectorCombBox.checkedIndexes()
     oldCount = self.ui.segmentSelectorCombBox.count
     self.ui.segmentSelectorCombBox.clear()
@@ -326,37 +331,30 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
       for index in oldIndex:
         self.ui.segmentSelectorCombBox.setCheckState(index, qt.Qt.Checked)
 
-    if method == METHOD_TETGEN:
-      self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.cleaverTab), False)
-      self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.tetgenTab), True)
-      self.ui.advancedTabWidget.setStyleSheet("QTabBar::tab::disabled {width: 0; height: 0; margin: 0; padding: 0; border: none;} ")
-
-    if method == METHOD_CLEAVER:
-      self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.tetgenTab), False)
-      self.ui.advancedTabWidget.setTabEnabled( self.ui.advancedTabWidget.indexOf(self.ui.cleaverTab), True)
-      self.ui.advancedTabWidget.setStyleSheet("QTabBar::tab::disabled {width: 0; height: 0; margin: 0; padding: 0; border: none;} ")
+    self.ui.CleaverParametersGroupBox.visible = (method == METHOD_CLEAVER)
+    self.ui.TetGenParametersGroupBox.visible = (method == METHOD_TETGEN)
 
     if method == METHOD_TETGEN and self.ui.tetgenUseSurface.isChecked():
-      if not self.ui.inputSurfaceSelector.currentNode():
+      if not self.ui.inputModelSelector.currentNode():
         self.ui.applyButton.text = "Select input surface"
         self.ui.applyButton.enabled = False
       elif not self.ui.outputModelSelector.currentNode():
         self.ui.applyButton.text = "Select an output model node"
         self.ui.applyButton.enabled = False
-      elif self.ui.inputSurfaceSelector.currentNode() == self.ui.outputModelSelector.currentNode():
+      elif self.ui.inputModelSelector.currentNode() == self.ui.outputModelSelector.currentNode():
         self.ui.applyButton.text = "Choose different Output model"
         self.ui.applyButton.enabled = False
       else:
         self.ui.applyButton.text = "Apply"
         self.ui.applyButton.enabled = True
     else:
-      if not self.ui.inputModelSelector.currentNode():
+      if not self.ui.inputSegmentationSelector.currentNode():
         self.ui.applyButton.text = "Select input segmentation"
         self.ui.applyButton.enabled = False
       elif not self.ui.outputModelSelector.currentNode():
         self.ui.applyButton.text = "Select an output model node"
         self.ui.applyButton.enabled = False
-      elif self.ui.inputModelSelector.currentNode() == self.ui.outputModelSelector.currentNode():
+      elif self.ui.inputSegmentationSelector.currentNode() == self.ui.outputModelSelector.currentNode():
         self.ui.applyButton.text = "Choose different Output model"
         self.ui.applyButton.enabled = False
       else:
@@ -410,20 +408,20 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
       print(method)
       if method == METHOD_CLEAVER:
-        self.logic.createMeshFromSegmentationCleaver(self.ui.inputModelSelector.currentNode(),
+        self.logic.createMeshFromSegmentationCleaver(self.ui.inputSegmentationSelector.currentNode(),
           self.ui.outputModelSelector.currentNode(), segments, self.ui.cleaverAdditionalParametersWidget.text,
           self.ui.cleaverRemoveBackgroundMeshCheckBox.isChecked(),
           self.ui.cleaverPaddingPercentSpinBox.value * 0.01, self.ui.cleaverFeatureScalingParameterWidget.value, self.ui.cleaverSamplingParameterWidget.value, self.ui.cleaverRateParameterWidget.value)
       else:
         if self.ui.tetgenUseSurface.isChecked():
-          if self.ui.inputSurfaceSelector.currentNode().GetUnstructuredGrid() is not None:
+          if self.ui.inputModelSelector.currentNode().GetUnstructuredGrid() is not None:
             self.addLog("Error: Mesh must be a surface, not volumetric")
             return
-          self.logic.createMeshFromPolyDataTetGen(self.ui.inputSurfaceSelector.currentNode().GetPolyData(),
+          self.logic.createMeshFromPolyDataTetGen(self.ui.inputModelSelector.currentNode().GetPolyData(),
             self.ui.outputModelSelector.currentNode(), self.ui.tetGenAdditionalParametersWidget.text,
             self.ui.tetgenRatioParameterWidget.value, self.ui.tetgenAngleParameterWidget.value, self.ui.tetgenVolumeParameterWidget.value)
         else:
-          self.logic.createMeshFromSegmentationTetGen(self.ui.inputModelSelector.currentNode(),
+          self.logic.createMeshFromSegmentationTetGen(self.ui.inputSegmentationSelector.currentNode(),
             self.ui.outputModelSelector.currentNode(), segments, self.ui.tetGenAdditionalParametersWidget.text,
             self.ui.tetgenRatioParameterWidget.value, self.ui.tetgenAngleParameterWidget.value, self.ui.tetgenVolumeParameterWidget.value)
 
@@ -693,7 +691,7 @@ class SegmentMesherLogic(ScriptedLoadableModuleLogic):
       segmentIdList.InsertNextValue(segment)
 
     if segmentIdList.GetNumberOfValues() == 0:
-      logging.info("createMeshFromSegmentationCleaver skipped: there are no selected segments")
+      self.addLog("No input segments are selected, therefore no output is generated.")
       return
 
     slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(inputSegmentation, segmentIdList, labelmapVolumeNode, labelmapVolumeNode)
