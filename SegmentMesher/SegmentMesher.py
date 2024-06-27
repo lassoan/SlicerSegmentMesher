@@ -92,6 +92,7 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
 
     # connections
+    self.ui.selectAllSegmentsButton.connect('clicked(bool)', self.onSelectAllSegmentsButton)
     self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
     self.ui.showTemporaryFilesFolderButton.connect('clicked(bool)', self.onShowTemporaryFilesFolder)
     self.ui.inputSegmentationSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateMRMLFromGUI)
@@ -313,7 +314,9 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     self.ui.segmentSelectorCombBox.visible = not inputIsModel
     self.ui.inputModelLabel.visible = inputIsModel
     self.ui.inputModelSelector.visible = inputIsModel
-    self.ui.segmentSelectorCombBox.enabled = self.ui.inputSegmentationSelector.currentNode() is not None
+    segmentationSelected = self.ui.inputSegmentationSelector.currentNode() is not None
+    self.ui.segmentSelectorCombBox.enabled = segmentationSelected
+    self.ui.selectAllSegmentsButton.enabled = segmentationSelected
 
     #populate segments
     inputSeg = self.ui.inputSegmentationSelector.currentNode()
@@ -324,7 +327,8 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
       segmentIDs = vtk.vtkStringArray()
       inputSeg.GetSegmentation().GetSegmentIDs(segmentIDs)
       for index in range(0, segmentIDs.GetNumberOfValues()):
-        self.ui.segmentSelectorCombBox.addItem(segmentIDs.GetValue(index))
+        segmentId = segmentIDs.GetValue(index)
+        self.ui.segmentSelectorCombBox.addItem(inputSeg.GetSegmentation().GetSegment(segmentId).GetName(), segmentId)
 
     #Restore index - often we will be reloading the data from the same segmentation, so re-select items number of items is the same
     if oldCount == self.ui.segmentSelectorCombBox.count:
@@ -404,7 +408,7 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
       segments = []
 
       for index in segmentIndexes:
-        segments.append(self.ui.segmentSelectorCombBox.itemText(index.row()))
+        segments.append(self.ui.segmentSelectorCombBox.itemData(index.row()))
 
       print(method)
       if method == METHOD_CLEAVER:
@@ -434,6 +438,12 @@ class SegmentMesherWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
       slicer.app.restoreOverrideCursor()
       self.modelGenerationInProgress = False
       self.updateMRMLFromGUI() # restores default Apply button state
+
+  def onSelectAllSegmentsButton(self):
+      newState = qt.Qt.Unchecked if self.ui.segmentSelectorCombBox.allChecked() else qt.Qt.Checked
+      model = self.ui.segmentSelectorCombBox.model()
+      for i in range(self.ui.segmentSelectorCombBox.count):
+        self.ui.segmentSelectorCombBox.setCheckState(model.index(i, 0), newState)
 
   def addLog(self, text):
     """Append text to log window
